@@ -232,9 +232,11 @@ class APIBridge:
                 pending_orders = sum(1 for o in orders if o.get('Status') in ['Pending', 'Partial'])
                 t_sales = sum(self._safe_float(o.get('Grand Total')) for o in orders if str(o.get('Order Date')) == today)
                 
-                completed_sales = sum(self._safe_float(o.get('Grand Total')) for o in orders if str(o.get('Status')) == 'Completed')
-                total_payments = sum(self._safe_float(p.get('Amount')) for p in payments)
-                total_out = completed_sales - total_payments
+                # BUG FIX: Dashboard par Total Outstanding ab directly Ledger se calculate hoga
+                # Purana shortcut (completed_sales - total_payments) manual entries aur adjustments ko ignore kar raha tha
+                total_debit = sum(self._safe_float(l.get('Debit')) for l in ledger)
+                total_credit = sum(self._safe_float(l.get('Credit')) for l in ledger)
+                total_out = total_debit - total_credit
 
                 notifications = db_core.read_table('AdminNotifications')
                 notifications.sort(key=lambda x: str(x.get('Notif ID', '')), reverse=True)
