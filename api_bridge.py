@@ -8,7 +8,7 @@ import json
 import math
 
 # ==========================================
-# STRICT MATCH: STORAGE PROVIDERS (UPGRADED FOR CLOUD)
+# STORAGE PROVIDERS (CLOUD READY)
 # ==========================================
 class StorageProvider:
     def save(self, folder, filename, b64_data): raise NotImplementedError
@@ -17,7 +17,6 @@ class StorageProvider:
     def get_file_b64(self, folder, filename): raise NotImplementedError
 
 class LocalStorageProvider(StorageProvider):
-    # Purana local storage intact rakha hai fallback ke liye
     def __init__(self, base_dir="images"):
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
@@ -51,7 +50,6 @@ class LocalStorageProvider(StorageProvider):
         return ""
 
 class SupabaseStorageProvider(StorageProvider):
-    """Naya Cloud Storage Provider jo images ko Supabase bucket mein dalega"""
     def __init__(self, bucket_name="product-images"):
         self.bucket = bucket_name
         
@@ -60,7 +58,6 @@ class SupabaseStorageProvider(StorageProvider):
             if not db_core.supabase: return ""
             data = base64.b64decode(b64_data.split(",")[1] if "," in b64_data else b64_data)
             path_on_supa = f"{folder}/{filename}"
-            # Safe overwrite logic
             try:
                 db_core.supabase.storage.from_(self.bucket).remove([path_on_supa])
             except:
@@ -96,11 +93,10 @@ class SupabaseStorageProvider(StorageProvider):
         except: return ""
 
 # ==========================================
-# STRICT MATCH: API BRIDGE CLASS (ALL LOGIC RETAINED)
+# API BRIDGE CLASS (BUG FIXED)
 # ==========================================
 class APIBridge:
     def __init__(self):
-        # FIX: Ab default storage mode 'cloud' set kar diya hai.
         self.storage_mode = 'cloud' 
         self.storage = LocalStorageProvider() if self.storage_mode == 'local' else SupabaseStorageProvider()
 
@@ -110,7 +106,24 @@ class APIBridge:
         if 'ProductRateMapping' in db_core.SCHEMAS and 'Material' not in db_core.SCHEMAS['ProductRateMapping']:
             db_core.SCHEMAS['ProductRateMapping'] = ['Customer ID', 'Universal Name', 'Material', 'Rate']
 
-    # --- CRITICAL INTEGRATION FIXES (100% Retained) ---
+    # --- BUG FIX 1: SMART ID GENERATOR ---
+    # Yeh duplicate IDs aur Overwrite conflict banne se rokega
+    def _generate_new_id(self, items, id_key, prefix, padding):
+        max_num = 0
+        for item in items:
+            val = str(item.get(id_key, ""))
+            if val.startswith(prefix):
+                try:
+                    num_part = val.replace(prefix, "")
+                    if "-" in num_part:
+                        num_part = num_part.split("-")[0]
+                    num = int(num_part)
+                    if num > max_num:
+                        max_num = num
+                except:
+                    pass
+        return f"{prefix}{max_num + 1:0{padding}d}"
+
     def _sanitize_data(self, data):
         if isinstance(data, list):
             return [self._sanitize_data(item) for item in data]
@@ -119,8 +132,7 @@ class APIBridge:
         elif isinstance(data, (datetime.datetime, datetime.date)):
             return data.strftime("%Y-%m-%d %H:%M:%S")
         elif isinstance(data, float):
-            if math.isnan(data) or math.isinf(data):
-                return 0.0
+            if math.isnan(data) or math.isinf(data): return 0.0
             return data
         else:
             return data
@@ -129,15 +141,13 @@ class APIBridge:
         try:
             if val in [None, "", " ", "N/A", "null"]: return 0.0
             return float(val)
-        except:
-            return 0.0
+        except: return 0.0
 
     def _safe_int(self, val):
         try:
             if val in [None, "", " ", "N/A", "null"]: return 0
             return int(float(val))
-        except:
-            return 0
+        except: return 0
 
     # --- AUTH ---
     def login(self, username="", password=""):
@@ -148,7 +158,7 @@ class APIBridge:
                     if str(user.get('Status')).strip().title() != 'Active': 
                         return {"success": False, "error": "Account is inactive."}
                     user['Last Login'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    db_core.write_table('UserMaster', users)
+                    db_core.write_table('UserMaster', [user]) # Upsert single user
                     safe_user = dict(user)
                     safe_user['Password'] = "" 
                     return self._sanitize_data({"success": True, "user": safe_user})
@@ -162,8 +172,7 @@ class APIBridge:
             actual = next((s.get('Setting Value') for s in settings if s.get('Setting Name') == 'Profit Password'), '')
             hashed_input = hashlib.sha256(str(pwd).encode('utf-8')).hexdigest()
             return {"success": hashed_input == actual}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        except Exception as e: return {"success": False, "error": str(e)}
 
     # --- DASHBOARD & NOTIFICATIONS ---
     def get_dashboard_stats(self, role="", user_id=""):
@@ -217,8 +226,7 @@ class APIBridge:
                     "outstanding": total_out,
                     "notifications": recent_notifications
                 })
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        except Exception as e: return {"success": False, "error": str(e)}
 
     def mark_notifications_read(self):
         try:
@@ -226,10 +234,9 @@ class APIBridge:
             for n in notifications: n['Is Read'] = 'Yes'
             db_core.write_table('AdminNotifications', notifications)
             return {"success": True}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        except Exception as e: return {"success": False, "error": str(e)}
 
-    # --- GLOBALS & MASTERS (Lists) ---
+    # --- GLOBALS & MASTERS ---
     def get_active_verticals(self):
         try:
             verts = db_core.read_table('VerticalMaster')
@@ -277,7 +284,7 @@ class APIBridge:
                     if str(u.get('Mobile Number')) == str(data.get('Mobile Number')) and str(data.get('Mobile Number')).strip() != "": return {"success": False, "error": "Mobile exists."}
             
             if not uid:
-                data['User ID'] = f"U{len(users) + 1:03d}"
+                data['User ID'] = self._generate_new_id(users, 'User ID', 'U', 3)
                 users.append(data)
             else:
                 for i, u in enumerate(users):
@@ -288,8 +295,7 @@ class APIBridge:
                         
             if not db_core.write_table('UserMaster', users): return {"success": False, "error": "Database write failed."}
             return {"success": True}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        except Exception as e: return {"success": False, "error": str(e)}
 
     def save_vertical(self, data=None):
         try:
@@ -297,7 +303,7 @@ class APIBridge:
             verts = db_core.read_table('VerticalMaster')
             vid = data.get('Vertical ID')
             if not vid:
-                data['Vertical ID'] = f"V{len(verts) + 1:03d}"
+                data['Vertical ID'] = self._generate_new_id(verts, 'Vertical ID', 'V', 3)
                 verts.append(data)
             else:
                 for i, v in enumerate(verts):
@@ -307,8 +313,7 @@ class APIBridge:
                         
             if not db_core.write_table('VerticalMaster', verts): return {"success": False, "error": "Database write failed."}
             return {"success": True}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        except Exception as e: return {"success": False, "error": str(e)}
 
     def save_universal(self, data=None):
         try:
@@ -331,17 +336,23 @@ class APIBridge:
                         univs[i] = data; break
             
             uname = data.get('Universal Name')
+            
+            # Universal Name change hua toh purane materials ko pehle cloud se uda do
+            if orig and str(orig).strip() != str(uname).strip():
+                db_core.delete_records('UniversalMaterials', {'Universal Name': orig})
+
+            # Sirf naye universal ke bache hue materials rakh kar add karo
             all_materials = [m for m in all_materials if str(m.get('Universal Name')) != str(orig)]
             for nm in new_materials:
                 nm['Universal Name'] = uname
                 all_materials.append(nm)
                 
-            s1 = db_core.write_table('UniversalMaster', univs)
-            s2 = db_core.write_table('UniversalMaterials', all_materials)
+            s1 = db_core.write_table('UniversalMaster', [data]) # Upsert
+            s2 = db_core.write_table('UniversalMaterials', new_materials) # Naye Upsert
+            
             if not s1 or not s2: return {"success": False, "error": "Database write failed."}
             return {"success": True}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        except Exception as e: return {"success": False, "error": str(e)}
 
     def save_product(self, data=None):
         try:
@@ -349,7 +360,7 @@ class APIBridge:
             products = db_core.read_table('ProductMaster')
             pid = data.get('Product ID')
             if not pid:
-                data['Product ID'] = f"P{len(products) + 1:04d}"
+                data['Product ID'] = self._generate_new_id(products, 'Product ID', 'P', 4)
                 products.append(data)
             else:
                 for i, p in enumerate(products):
@@ -359,8 +370,7 @@ class APIBridge:
                         
             if not db_core.write_table('ProductMaster', products): return {"success": False, "error": "Database write failed."}
             return {"success": True, "productId": data['Product ID']}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        except Exception as e: return {"success": False, "error": str(e)}
 
     def save_profit_password(self, new_pwd=""):
         try:
@@ -377,39 +387,33 @@ class APIBridge:
             
             if not db_core.write_table('Settings', settings): return {"success": False, "error": "Database write failed."}
             return {"success": True}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        except Exception as e: return {"success": False, "error": str(e)}
 
-    # --- DELETE OPERATIONS ---
+    # --- BUG FIX 2: REAL CLOUD DELETIONS ---
     def delete_user(self, user_id=""):
         try:
-            users = [u for u in db_core.read_table('UserMaster') if str(u.get('User ID')) != str(user_id)]
-            if not db_core.write_table('UserMaster', users): return {"success": False, "error": "Safety guard active."}
-            return {"success": True}
+            if db_core.delete_records('UserMaster', {'User ID': user_id}): return {"success": True}
+            return {"success": False, "error": "Safety guard active."}
         except Exception as e: return {"success": False, "error": str(e)}
 
     def delete_vertical(self, vid=""):
         try:
-            verts = [v for v in db_core.read_table('VerticalMaster') if str(v.get('Vertical ID')) != str(vid)]
-            if not db_core.write_table('VerticalMaster', verts): return {"success": False, "error": "Safety guard active."}
-            return {"success": True}
+            if db_core.delete_records('VerticalMaster', {'Vertical ID': vid}): return {"success": True}
+            return {"success": False, "error": "Safety guard active."}
         except Exception as e: return {"success": False, "error": str(e)}
 
     def delete_universal(self, name=""):
         try:
-            univs = [u for u in db_core.read_table('UniversalMaster') if str(u.get('Universal Name')) != str(name)]
-            materials = [m for m in db_core.read_table('UniversalMaterials') if str(m.get('Universal Name')) != str(name)]
-            s1 = db_core.write_table('UniversalMaster', univs)
-            s2 = db_core.write_table('UniversalMaterials', materials)
-            if not s1 or not s2: return {"success": False, "error": "Safety guard active."}
-            return {"success": True}
+            s1 = db_core.delete_records('UniversalMaster', {'Universal Name': name})
+            s2 = db_core.delete_records('UniversalMaterials', {'Universal Name': name})
+            if s1 and s2: return {"success": True}
+            return {"success": False, "error": "Safety guard active."}
         except Exception as e: return {"success": False, "error": str(e)}
 
     def delete_product(self, pid=""):
         try:
-            products = [p for p in db_core.read_table('ProductMaster') if str(p.get('Product ID')) != str(pid)]
-            if not db_core.write_table('ProductMaster', products): return {"success": False, "error": "Safety guard active."}
-            return {"success": True}
+            if db_core.delete_records('ProductMaster', {'Product ID': pid}): return {"success": True}
+            return {"success": False, "error": "Safety guard active."}
         except Exception as e: return {"success": False, "error": str(e)}
 
     # --- CATALOG & ORDERING ---
@@ -506,8 +510,7 @@ class APIBridge:
                     "Materials": processed_mats
                 })
             return self._sanitize_data({"success": True, "products": order_products})
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        except Exception as e: return {"success": False, "error": str(e)}
 
     def submit_order(self, payload=None):
         try:
@@ -516,7 +519,7 @@ class APIBridge:
             details = db_core.read_table('OrderDetails')
             users = db_core.read_table('UserMaster')
 
-            new_order_id = f"ORD-{len(headers) + 1:05d}"
+            new_order_id = self._generate_new_id(headers, 'Order ID', 'ORD-', 5)
             now = datetime.datetime.now()
             order_date = now.strftime("%Y-%m-%d")
             created_time = now.strftime("%H:%M:%S")
@@ -526,28 +529,29 @@ class APIBridge:
                 if str(u.get('User ID')) == str(payload.get('customerId')):
                     cust_name = str(u.get('User Name'))
                     u['Last Order Date'] = order_date
+                    db_core.write_table('UserMaster', [u])
                     break
-            db_core.write_table('UserMaster', users)
 
             total_items = len(payload.get('items', []))
             total_qty = sum(self._safe_int(item.get('orderedQty')) for item in payload.get('items', []))
             total_amount = sum(self._safe_float(item.get('rate')) * self._safe_int(item.get('orderedQty')) for item in payload.get('items', []))
 
-            headers.append({
+            h_data = {
                 'Order ID': new_order_id, 'Order Date': order_date, 'Customer ID': payload.get('customerId'),
                 'Customer Name': cust_name, 'Total Items': total_items, 'Total Quantity': total_qty,
                 'Total Amount': total_amount, 'Packing Charges': 0.0, 'Freight Charges': 0.0,
                 'Discount': 0.0, 'Other Charges': 0.0, 'Misc Description': '',
                 'Grand Total': total_amount, 'Special Message': payload.get('specialMessage', ''),
                 'Status': 'Pending', 'Created By': payload.get('createdBy', ''), 'Created Time': created_time
-            })
+            }
 
+            d_data_list = []
             for idx, item in enumerate(payload.get('items', [])):
                 ordered_qty = self._safe_int(item.get('orderedQty'))
                 rate = self._safe_float(item.get('rate'))
                 cost_p = self._safe_float(item.get('costPrice'))
                 
-                details.append({
+                d_data_list.append({
                     'Order Detail ID': f"{new_order_id}-{idx+1:03d}", 'Order ID': new_order_id,
                     'Product ID': item.get('productId'), 'Product Title': item.get('productTitle'),
                     'Universal Name': item.get('universalName'), 'Material': item.get('material', 'Clear'),
@@ -558,14 +562,12 @@ class APIBridge:
                     'Prepared By': '', 'Prepared Time': ''
                 })
 
-            s1 = db_core.write_table('OrderHeader', headers)
-            s2 = db_core.write_table('OrderDetails', details)
+            s1 = db_core.write_table('OrderHeader', [h_data])
+            s2 = db_core.write_table('OrderDetails', d_data_list)
             if not s1 or not s2: return {"success": False, "error": "Database write failed."}
             return {"success": True, "orderId": new_order_id}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        except Exception as e: return {"success": False, "error": str(e)}
 
-    # --- ORDER HISTORY & PROCESSING ---
     def get_orders_history(self, user_role="", customer_id=""):
         try:
             headers = db_core.read_table('OrderHeader')
@@ -598,6 +600,8 @@ class APIBridge:
             total_delivered = 0
             new_base_amount = 0.0
             
+            d_updates = []
+            
             for update_item in payload.get('items', []):
                 detail_id = update_item.get('detailId')
                 delivered_qty = self._safe_int(update_item.get('deliveredQty'))
@@ -625,13 +629,13 @@ class APIBridge:
                                 msg = f"{staff_name} packed {delivered_qty} of {d.get('Product Title')} for Order {order_id}"
                                 recent = [n for n in notifications if str(n.get('Message')) == msg]
                                 if not recent:
-                                    notifications.append({
+                                    notif_data = {
                                         'Notif ID': f"N{len(notifications)+1:06d}",
                                         'Date Time': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                         'Message': msg,
                                         'Is Read': 'No'
-                                    })
-                                    db_core.write_table('AdminNotifications', notifications)
+                                    }
+                                    db_core.write_table('AdminNotifications', [notif_data])
                             else:
                                 d['Prepared By'] = ""
                                 d['Prepared Time'] = ""
@@ -639,6 +643,7 @@ class APIBridge:
                         total_ordered += ordered_qty
                         total_delivered += delivered_qty
                         new_base_amount += d.get('Line Amount')
+                        d_updates.append(d)
                         break
 
             auto_status = 'Pending'
@@ -651,6 +656,7 @@ class APIBridge:
             date_str = ""
             grand_total = 0.0
 
+            h_update = None
             for h in headers:
                 if str(h.get('Order ID')) == str(order_id):
                     h['Status'] = auto_status
@@ -672,43 +678,42 @@ class APIBridge:
                     h['Total Amount'] = new_base_amount
                     h['Grand Total'] = new_base_amount + p_charge + f_charge + o_charge - d_charge
                     grand_total = self._safe_float(h.get('Grand Total'))
+                    h_update = h
                     break
 
-            s1 = db_core.write_table('OrderHeader', headers)
-            s2 = db_core.write_table('OrderDetails', details)
-            if not s1 or not s2: return {"success": False, "error": "Database write failed."}
+            if h_update: db_core.write_table('OrderHeader', [h_update])
+            if d_updates: db_core.write_table('OrderDetails', d_updates)
 
             if auto_status == 'Completed' and customer_id:
                 ledger = db_core.read_table('LedgerMaster')
                 existing_idx = next((i for i, l in enumerate(ledger) if str(l.get('Reference ID')) == str(order_id) and str(l.get('Reference Type')) == 'Order Delivery'), None)
-                if existing_idx is not None: ledger[existing_idx]['Debit'] = grand_total
+                if existing_idx is not None: 
+                    ledger[existing_idx]['Debit'] = grand_total
+                    db_core.write_table('LedgerMaster', [ledger[existing_idx]])
                 else:
-                    ledger.append({
-                        'Ledger ID': f"L{len(ledger) + 1:05d}", 'Date': date_str, 'Customer ID': customer_id, 'Customer Name': customer_name,
+                    new_lid = self._generate_new_id(ledger, 'Ledger ID', 'L', 5)
+                    l_data = {
+                        'Ledger ID': new_lid, 'Date': date_str, 'Customer ID': customer_id, 'Customer Name': customer_name,
                         'Reference Type': 'Order Delivery', 'Reference ID': order_id, 'Debit': grand_total, 'Credit': 0,
                         'Balance': 0, 'Remarks': 'Order Processed', 'Created By': 'System', 'Created Time': datetime.datetime.now().strftime("%H:%M:%S")
-                    })
-                db_core.write_table('LedgerMaster', ledger)
+                    }
+                    db_core.write_table('LedgerMaster', [l_data])
                 db_core.rebuild_customer_ledger(customer_id)
 
             return {"success": True}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        except Exception as e: return {"success": False, "error": str(e)}
 
+    # REAL DATABASE DELETE CALLED HERE
     def delete_order(self, order_id=""):
         try:
             h = next((h for h in db_core.read_table('OrderHeader') if str(h.get('Order ID')) == str(order_id)), None)
             if h:
                 c_id = h.get('Customer ID')
-                h_list = [hx for hx in db_core.read_table('OrderHeader') if str(hx.get('Order ID')) != str(order_id)]
-                d_list = [dx for dx in db_core.read_table('OrderDetails') if str(dx.get('Order ID')) != str(order_id)]
-                l_list = [l for l in db_core.read_table('LedgerMaster') if not (str(l.get('Reference ID')) == str(order_id) and str(l.get('Reference Type')) == 'Order Delivery')]
-                
-                s1 = db_core.write_table('OrderHeader', h_list)
-                s2 = db_core.write_table('OrderDetails', d_list)
-                db_core.write_table('LedgerMaster', l_list)
+                s1 = db_core.delete_records('OrderHeader', {'Order ID': order_id})
+                s2 = db_core.delete_records('OrderDetails', {'Order ID': order_id})
+                db_core.delete_records('LedgerMaster', {'Reference ID': order_id, 'Reference Type': 'Order Delivery'})
                 db_core.rebuild_customer_ledger(c_id)
-                if not s1 or not s2: return {"success": False, "error": "Safety guard active."}
+                if not s1 or not s2: return {"success": False, "error": "Database delete failed."}
             return {"success": True}
         except Exception as e: return {"success": False, "error": str(e)}
 
@@ -785,6 +790,7 @@ class APIBridge:
             uni_name_lower = str(uni_name).strip().lower()
             mat_name_lower = str(material).strip().lower()
             
+            r_data = None
             for r in rates:
                 r_uni = str(r.get('Universal Name', '')).strip().lower()
                 r_mat = str(r.get('Material', '')).strip().lower()
@@ -793,22 +799,28 @@ class APIBridge:
                 if str(r.get('Customer ID')).strip() == str(cust_id).strip() and r_uni == uni_name_lower and r_mat == mat_name_lower:
                     r['Rate'] = rate
                     r['Material'] = material
+                    r_data = r
                     found = True
                     break
                     
             if not found: 
-                rates.append({
+                r_data = {
                     'Customer ID': cust_id, 
                     'Universal Name': uni_name, 
                     'Material': material, 
                     'Rate': rate
-                })
+                }
                 
-            if not db_core.write_table('ProductRateMapping', rates): return {"success": False, "error": "Database write failed."}
+            if r_data and str(rate).strip() == "":
+                # Delete mapping if rate is emptied
+                db_core.delete_records('ProductRateMapping', {'Customer ID': cust_id, 'Universal Name': uni_name, 'Material': material})
+            elif r_data:
+                if not db_core.write_table('ProductRateMapping', [r_data]): return {"success": False, "error": "Database write failed."}
+                
             return {"success": True}
         except Exception as e: return {"success": False, "error": str(e)}
 
-    # --- FINANCIALS (Ledger & Payments) ---
+    # --- FINANCIALS ---
     def add_ledger_entry(self, payload=None):
         try:
             if payload is None: return {"success": False, "error": "No payload"}
@@ -822,40 +834,38 @@ class APIBridge:
             cust_name = next((u.get('User Name') for u in users if str(u.get('User ID')) == str(customer_id)), "")
 
             ledger = db_core.read_table('LedgerMaster')
-            new_lid = f"L{len(ledger) + 1:05d}"
+            new_lid = self._generate_new_id(ledger, 'Ledger ID', 'L', 5)
             created_time = datetime.datetime.now().strftime("%H:%M:%S")
 
             if entry_type == 'Payment Received':
                 payments = db_core.read_table('PaymentMaster')
-                pid = f"PAY-{len(payments) + 1:05d}"
-                payments.append({
+                pid = self._generate_new_id(payments, 'Payment ID', 'PAY-', 5)
+                db_core.write_table('PaymentMaster', [{
                     'Payment ID': pid, 'Date': date_str, 'Customer ID': customer_id, 'Customer Name': cust_name,
                     'Amount': amount, 'Payment Mode': 'Other', 'Transaction Number': '', 'Remarks': remarks,
                     'Created By': 'Manual Entry', 'Created Time': created_time
-                })
-                db_core.write_table('PaymentMaster', payments)
+                }])
 
-                ledger.append({
+                db_core.write_table('LedgerMaster', [{
                     'Ledger ID': new_lid, 'Date': date_str, 'Customer ID': customer_id, 'Customer Name': cust_name,
                     'Reference Type': 'Payment Receipt', 'Reference ID': pid, 'Debit': 0, 'Credit': amount,
                     'Balance': 0, 'Remarks': remarks, 'Created By': 'Manual Entry', 'Created Time': created_time
-                })
+                }])
 
             elif entry_type == 'Miscellaneous Sale':
-                ledger.append({
+                db_core.write_table('LedgerMaster', [{
                     'Ledger ID': new_lid, 'Date': date_str, 'Customer ID': customer_id, 'Customer Name': cust_name,
                     'Reference Type': 'Misc Sale', 'Reference ID': 'MISC', 'Debit': amount, 'Credit': 0,
                     'Balance': 0, 'Remarks': remarks, 'Created By': 'Manual Entry', 'Created Time': created_time
-                })
+                }])
 
             elif entry_type == 'Adjustment':
-                ledger.append({
+                db_core.write_table('LedgerMaster', [{
                     'Ledger ID': new_lid, 'Date': date_str, 'Customer ID': customer_id, 'Customer Name': cust_name,
                     'Reference Type': 'Adjustment', 'Reference ID': 'ADJ', 'Debit': 0, 'Credit': amount,
                     'Balance': 0, 'Remarks': remarks, 'Created By': 'Manual Entry', 'Created Time': created_time
-                })
+                }])
 
-            if not db_core.write_table('LedgerMaster', ledger): return {"success": False, "error": "Database write failed."}
             db_core.rebuild_customer_ledger(customer_id)
             return {"success": True}
         except Exception as e: return {"success": False, "error": str(e)}
@@ -880,36 +890,49 @@ class APIBridge:
             date_str = payload.get('Date')
 
             if not pid:
-                pid = f"PAY-{len(payments) + 1:05d}"
+                pid = self._generate_new_id(payments, 'Payment ID', 'PAY-', 5)
                 payload['Payment ID'] = pid
                 payload['Customer Name'] = customer_name
                 payload['Created Time'] = datetime.datetime.now().strftime("%H:%M:%S")
-                payments.append(payload)
             else:
                 for i, p in enumerate(payments):
                     if str(p.get('Payment ID')) == str(pid):
                         payload['Customer Name'] = customer_name
                         payload['Created Time'] = p.get('Created Time', datetime.datetime.now().strftime("%H:%M:%S"))
-                        payments[i] = payload; break
+                        break
             
-            s1 = db_core.write_table('PaymentMaster', payments)
+            s1 = db_core.write_table('PaymentMaster', [payload])
 
             ledger = db_core.read_table('LedgerMaster')
             existing_idx = next((i for i, l in enumerate(ledger) if str(l.get('Reference ID')) == str(pid) and str(l.get('Reference Type')) == 'Payment Receipt'), None)
             if existing_idx is not None:
                 ledger[existing_idx]['Credit'] = amount
                 ledger[existing_idx]['Date'] = date_str
+                s2 = db_core.write_table('LedgerMaster', [ledger[existing_idx]])
             else:
-                ledger.append({
-                    'Ledger ID': f"L{len(ledger) + 1:05d}", 'Date': date_str, 'Customer ID': customer_id, 'Customer Name': customer_name,
+                new_lid = self._generate_new_id(ledger, 'Ledger ID', 'L', 5)
+                s2 = db_core.write_table('LedgerMaster', [{
+                    'Ledger ID': new_lid, 'Date': date_str, 'Customer ID': customer_id, 'Customer Name': customer_name,
                     'Reference Type': 'Payment Receipt', 'Reference ID': pid, 'Debit': 0, 'Credit': amount,
                     'Balance': 0, 'Remarks': payload.get('Remarks', ''), 'Created By': payload.get('Created By', ''),
                     'Created Time': payload.get('Created Time', '')
-                })
+                }])
                 
-            s2 = db_core.write_table('LedgerMaster', ledger)
             db_core.rebuild_customer_ledger(customer_id)
             if not s1 or not s2: return {"success": False, "error": "Database write failed."}
+            return {"success": True}
+        except Exception as e: return {"success": False, "error": str(e)}
+
+    # REAL DATABASE DELETE CALLED HERE
+    def delete_payment(self, pay_id=""):
+        try:
+            p = next((p for p in db_core.read_table('PaymentMaster') if str(p.get('Payment ID')) == str(pay_id)), None)
+            if p:
+                c_id = p.get('Customer ID')
+                s1 = db_core.delete_records('PaymentMaster', {'Payment ID': pay_id})
+                db_core.delete_records('LedgerMaster', {'Reference ID': pay_id, 'Reference Type': 'Payment Receipt'})
+                db_core.rebuild_customer_ledger(c_id)
+                if not s1: return {"success": False, "error": "Database delete failed."}
             return {"success": True}
         except Exception as e: return {"success": False, "error": str(e)}
 
@@ -920,8 +943,6 @@ class APIBridge:
             accs = []
             for u in users:
                 cid = str(u.get('User ID', '')).strip().lower()
-                
-                # FIX: String matching robust bana di hai (Spaces ignore karega)
                 c_ledg = [l for l in ledger if str(l.get('Customer ID', '')).strip().lower() == cid]
                 
                 tot_sales = sum(self._safe_float(l.get('Debit')) for l in c_ledg)
@@ -942,7 +963,6 @@ class APIBridge:
             u = next((x for x in users if str(x.get('User ID', '')).strip().lower() == clean_customer_id), None)
             if not u: return {"success": False, "error": "Customer not found"}
             
-            # FIX: Spaces automatically ignore honge
             c_ledg = [l for l in ledger if str(l.get('Customer ID', '')).strip().lower() == clean_customer_id]
             c_ledg.sort(key=lambda x: (str(x.get('Date','')), str(x.get('Created Time', '')), str(x.get('Ledger ID', ''))))
             
@@ -996,20 +1016,17 @@ class APIBridge:
             return self._sanitize_data({"success": True, "data": data})
         except Exception as e: return {"success": False, "error": str(e)}
 
-    # --- FILE & IMAGES (UPGRADED FOR CLOUD) ---
+    # --- FILE & IMAGES ---
     def open_manufacturing_file(self, file_path=""):
         try:
-            # FIX: Cloud server apni screen par double click nahi kar sakta
-            # Ab yeh frontend ko bas path bhejega taaki HTML tag se open ho sake
             if not file_path or str(file_path).strip() in ['N/A', '']: return {"success": False, "error": "No file path defined."}
             return self._sanitize_data({"success": True, "path": file_path, "message": "Cloud mode: Use frontend to download/open this path."})
         except Exception as e: return {"success": False, "error": str(e)}
 
     def check_manufacturing_file(self, file_path=""):
         try:
-            # FIX: Ab yeh check karega ki input khali toh nahi hai
             if not file_path or str(file_path).strip() in ['N/A', '']: return False
-            return True # Cloud pe directory exist hone ka physical test ab jaruri nahi 
+            return True 
         except: return False
 
     def get_product_images(self, product_id=""):
@@ -1043,8 +1060,8 @@ class APIBridge:
             for p in products:
                 if str(p.get('Product ID')) == str(product_id):
                     p['Image Folder'] = folder_path
+                    db_core.write_table('ProductMaster', [p])
                     break
-            db_core.write_table('ProductMaster', products)
             return {"success": True}
         except Exception as e: return {"success": False, "error": str(e)}
 
@@ -1057,11 +1074,8 @@ class APIBridge:
 
     def backup_data(self):
         try:
-            # FIX: Cloud me purana 'data' folder zip nahi hoga.
-            # Ab yeh Supabase ki saari tables ka JSON data generate karke bhejega!
             now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_data_dict = {}
-            
             for table_name in db_core.SCHEMAS.keys():
                 backup_data_dict[table_name] = db_core.read_table(table_name)
                 
@@ -1072,9 +1086,6 @@ class APIBridge:
             with open(file_path, 'w') as f:
                 json.dump(backup_data_dict, f)
                 
-            logs = db_core.read_table('BackupLog')
-            logs.append({'Backup Date': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 'Backup File': f"{file_path.name}", 'Created By': 'Admin'})
-            db_core.write_table('BackupLog', logs)
-            
+            db_core.write_table('BackupLog', [{'Backup Date': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 'Backup File': f"{file_path.name}", 'Created By': 'Admin'}])
             return self._sanitize_data({"success": True, "path": str(file_path)})
         except Exception as e: return {"success": False, "error": str(e)}
