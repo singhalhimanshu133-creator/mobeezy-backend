@@ -127,8 +127,8 @@
                 <p class="text-gray-500 text-sm mt-1">Screen Guard Ordering System</p>
             </div>
             
-            <!-- Install App Banner (Hidden by default, shown by PWA logic) -->
-            <div id="install-app-banner" class="install-banner hidden mb-6 cursor-pointer" onclick="installApp()">
+            <!-- Install App Banner (Visible by default, auto-hides if installed) -->
+            <div id="install-app-banner" class="install-banner mb-6 cursor-pointer" onclick="installApp()">
                 <div class="flex items-center gap-3">
                     <i class="ph ph-download-simple text-2xl"></i>
                     <div class="text-left">
@@ -527,13 +527,16 @@
         // ==========================================
         // PWA SERVICE WORKER (MAGIC INSTALLER)
         // ==========================================
-        // Yeh browser ko vishwas dilata hai ki yeh ek asli app hai taaki Install prompt aa jaye!
+        // Yeh Chrome aur Safari ko fool-proof signal dega ki yeh ek asli app hai
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 const swCode = `
                     self.addEventListener('install', (e) => { self.skipWaiting(); });
                     self.addEventListener('activate', (e) => { e.waitUntil(clients.claim()); });
-                    self.addEventListener('fetch', (e) => { }); // Dummy fetch for PWA criteria
+                    self.addEventListener('fetch', (e) => { 
+                        // Dummy fetch interceptor - strictly required by Chrome for PWA install prompt
+                        // Does not interfere with API calls
+                    }); 
                 `;
                 const blob = new Blob([swCode], {type: 'application/javascript'});
                 const swUrl = URL.createObjectURL(blob);
@@ -623,26 +626,41 @@
         // PWA (DOWNLOADABLE APP) INSTALL LOGIC
         // ==========================================
         let deferredPrompt;
+        
+        // Hide banner if app is already installed and running in standalone mode
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+            document.addEventListener('DOMContentLoaded', () => {
+                const banner = document.getElementById('install-app-banner');
+                if(banner) banner.style.display = 'none';
+            });
+        }
+
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
-            // Show the install banner on the login screen
-            const installBanner = document.getElementById('install-app-banner');
-            if(installBanner) installBanner.classList.remove('hidden');
+            // Agar browser ne prompt diya hai, toh definitely banner dikhao
+            const banner = document.getElementById('install-app-banner');
+            if(banner) banner.style.display = 'flex';
         });
 
         async function installApp() {
             if (deferredPrompt) {
+                // Android / Chrome direct install
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
                 if (outcome === 'accepted') {
-                    showToast("✅ App Installation Started!");
-                    document.getElementById('install-app-banner').classList.add('hidden');
+                    showToast("✅ App Installation Started!", "success");
+                    document.getElementById('install-app-banner').style.display = 'none';
                 }
                 deferredPrompt = null;
             } else {
-                // Manual instructions for iOS Safari
-                showToast("Tap 'Share' then 'Add to Home Screen' to install.", 'info');
+                // iOS Safari fallback
+                const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+                if (isIos) {
+                    showToast("🍎 iPhone: Tap 'Share' (arrow icon) at bottom -> 'Add to Home Screen' ➕", "info");
+                } else {
+                    showToast("Please tap the browser menu (⋮) and select 'Install App' or 'Add to Home screen'.", "info");
+                }
             }
         }
 
