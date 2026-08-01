@@ -57,9 +57,15 @@ class SupabaseStorageProvider(StorageProvider):
         
     def save(self, folder, filename, b64_data):
         try:
+            if not db_core.supabase: return ""
             data = base64.b64decode(b64_data.split(",")[1] if "," in b64_data else b64_data)
             path_on_supa = f"{folder}/{filename}"
-            db_core.supabase.storage.from_(self.bucket).upload(path_on_supa, data, {"upsert": "true"})
+            # Safe overwrite logic
+            try:
+                db_core.supabase.storage.from_(self.bucket).remove([path_on_supa])
+            except:
+                pass
+            db_core.supabase.storage.from_(self.bucket).upload(path_on_supa, data)
             return f"{self.bucket}/{folder}/"
         except Exception as e:
             print("Storage Save Error:", e)
@@ -67,18 +73,21 @@ class SupabaseStorageProvider(StorageProvider):
             
     def list_files(self, folder):
         try:
+            if not db_core.supabase: return []
             res = db_core.supabase.storage.from_(self.bucket).list(folder)
             return [f['name'] for f in res if f['name'] != '.emptyFolderPlaceholder']
         except: return []
         
     def delete(self, folder, filename):
         try:
+            if not db_core.supabase: return False
             db_core.supabase.storage.from_(self.bucket).remove([f"{folder}/{filename}"])
             return True
         except: return False
         
     def get_file_b64(self, folder, filename):
         try:
+            if not db_core.supabase: return ""
             res = db_core.supabase.storage.from_(self.bucket).download(f"{folder}/{filename}")
             b64 = base64.b64encode(res).decode('utf-8')
             ext = filename.split('.')[-1].lower()
@@ -901,21 +910,6 @@ class APIBridge:
             s2 = db_core.write_table('LedgerMaster', ledger)
             db_core.rebuild_customer_ledger(customer_id)
             if not s1 or not s2: return {"success": False, "error": "Database write failed."}
-            return {"success": True}
-        except Exception as e: return {"success": False, "error": str(e)}
-
-    def delete_payment(self, pid=""):
-        try:
-            p = next((px for px in db_core.read_table('PaymentMaster') if str(px.get('Payment ID')) == str(pid)), None)
-            if p:
-                c_id = p.get('Customer ID')
-                p_list = [px for px in db_core.read_table('PaymentMaster') if str(px.get('Payment ID')) != str(pid)]
-                l_list = [l for l in db_core.read_table('LedgerMaster') if not (str(l.get('Reference ID')) == str(pid) and str(l.get('Reference Type')) == 'Payment Receipt')]
-                
-                s1 = db_core.write_table('PaymentMaster', p_list)
-                db_core.write_table('LedgerMaster', l_list)
-                db_core.rebuild_customer_ledger(c_id)
-                if not s1: return {"success": False, "error": "Safety guard active."}
             return {"success": True}
         except Exception as e: return {"success": False, "error": str(e)}
 

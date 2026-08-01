@@ -1,5 +1,6 @@
 import os
 import hashlib
+import base64
 from supabase import create_client, Client
 
 # ==========================================
@@ -102,7 +103,6 @@ def init_db():
             
         write_table('VerticalMaster', migrated_verts)
 
-
 # ==========================================
 # STRICT MATCH: READ & WRITE OPERATIONS
 # ==========================================
@@ -157,7 +157,6 @@ def write_table(table_name, data):
         print(f"Error writing {table_name}: {str(e)}")
         return False
 
-
 # ==========================================
 # STRICT MATCH: LEDGER REBUILD
 # ==========================================
@@ -194,3 +193,22 @@ def rebuild_customer_ledger(customer_id):
             
     except Exception as e:
         print(f"Error rebuilding ledger: {e}")
+
+# ==========================================
+# IMAGE UPLOAD LOGIC
+# ==========================================
+def upload_image_to_storage(file_name, file_bytes, content_type):
+    """Takes image bytes from backend and sends to Supabase Storage."""
+    try:
+        # 'product-images' bucket mein file upload karega
+        supabase.storage.from_('product-images').upload(
+            file_name, 
+            file_bytes, 
+            {"content-type": content_type}
+        )
+        # Upload hone ke baad uska Public URL nikal kar dega
+        url = supabase.storage.from_('product-images').get_public_url(file_name)
+        return url
+    except Exception as e:
+        print(f"Supabase Storage Error: {e}")
+        return None
