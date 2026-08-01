@@ -1,0 +1,1648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <!-- PWA / DOWNLOADABLE APP META TAGS -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1d4ed8">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/5605/5605031.png">
+    
+    <!-- EMBEDDED MANIFEST FOR APP INSTALLATION -->
+    <link rel="manifest" href='data:application/manifest+json;utf8,{"name":"Mobeezy Screen Guard","short_name":"Mobeezy","start_url":".","display":"standalone","background_color":"#f8fafc","theme_color":"#1d4ed8","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/5605/5605031.png","sizes":"512x512","type":"image/png"}]}'>
+
+    <title>Mobeezy Screen Guard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        :root {
+            /* Mobeezy SaaS Branding Colors */
+            --primary: #1d4ed8;       
+            --primary-light: #2563eb; 
+            --bg-color: #f8fafc;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        * { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: var(--bg-color); color: var(--text-main); overflow-x: hidden; }
+        
+        /* Hide scrollbars for clean mobile look */
+        ::-webkit-scrollbar { width: 0px; height: 0px; background: transparent; }
+
+        /* Animations */
+        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .view-section { display: none; padding-top: 60px; padding-bottom: 80px; min-height: 100vh; animation: fadeIn 0.2s ease-out; }
+        .view-section.active { display: block; }
+        .view-section.slide-active { display: block; animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        
+        .mobile-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); margin-bottom: 12px; }
+        
+        /* Form & Buttons */
+        .btn { border-radius: 8px; font-weight: 600; text-align: center; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;}
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:active { background: var(--primary-light); transform: scale(0.98); }
+        .btn-secondary { background: #f1f5f9; color: var(--text-main); border: 1px solid var(--border-color); }
+        .input-box { width: 100%; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px; font-size: 15px; outline: none; transition: border 0.2s; background: white; }
+        .input-box:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(29,78,216,0.1); }
+        
+        /* Bottom Nav */
+        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: white; border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; align-items: center; height: 65px; z-index: 40; padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -2px 10px rgba(0,0,0,0.03); }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--text-muted); font-size: 11px; font-weight: 500; gap: 4px; width: 60px; cursor: pointer; }
+        .nav-item.active { color: var(--primary); }
+        .nav-item i { font-size: 24px; }
+
+        /* Header */
+        .top-header { position: fixed; top: 0; left: 0; width: 100%; background: white; border-bottom: 1px solid var(--border-color); height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; z-index: 40; padding-top: env(safe-area-inset-top); }
+        
+        /* Sidebar Menu */
+        #side-menu { position: fixed; top: 0; left: -100%; width: 280px; height: 100vh; background: white; z-index: 100; transition: 0.3s; box-shadow: 2px 0 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        #side-menu.open { left: 0; }
+        .menu-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 90; display: none; opacity: 0; transition: 0.3s; }
+        .menu-overlay.open { display: block; opacity: 1; }
+
+        /* Radio Selection */
+        .radio-card input[type="radio"] { display: none; }
+        .radio-card label { display: flex; justify-content: space-between; align-items: center; padding: 16px; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 10px; background: white; transition: 0.2s; cursor: pointer; }
+        .radio-card input[type="radio"]:checked + label { border-color: var(--primary); background: #eff6ff; box-shadow: 0 2px 8px rgba(29,78,216,0.1); }
+        .radio-card .radio-btn { width: 20px; height: 20px; border: 2px solid #cbd5e1; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+        .radio-card input[type="radio"]:checked + label .radio-btn { border-color: var(--primary); }
+        .radio-card input[type="radio"]:checked + label .radio-btn::after { content: ''; width: 10px; height: 10px; background: var(--primary); border-radius: 50%; }
+
+        /* Stepper */
+        .stepper { display: flex; align-items: center; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; background: white; }
+        .stepper button { width: 44px; height: 44px; background: #f8fafc; border: none; font-size: 20px; color: var(--text-main); }
+        .stepper button:active { background: #e2e8f0; }
+        .stepper input { flex: 1; text-align: center; border: none; border-left: 1px solid var(--border-color); border-right: 1px solid var(--border-color); height: 44px; font-weight: 600; font-size: 16px; width: 60px; }
+
+        /* Status Badges */
+        .badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .badge-pending { background: #fef3c7; color: #b45309; }
+        .badge-partial { background: #e0f2fe; color: #0369a1; }
+        .badge-completed { background: #d1fae5; color: #047857; }
+
+        /* Fullscreen Image Gallery */
+        #gallery-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 2000; display: flex; flex-direction: column; opacity: 0; pointer-events: none; transition: 0.2s; }
+        #gallery-modal.active { opacity: 1; pointer-events: all; }
+        .gallery-img-container { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; touch-action: none; }
+        #gallery-main-img { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.1s ease-out; }
+        .gallery-strip { height: 80px; display: flex; gap: 10px; padding: 10px; overflow-x: auto; background: rgba(0,0,0,0.8); align-items: center; }
+        .gallery-thumb { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; border: 2px solid transparent; opacity: 0.5; transition: 0.2s; }
+        .gallery-thumb.active { opacity: 1; border-color: var(--primary); }
+
+        /* Loading Spinner */
+        .loader { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid var(--primary); width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* App Install Banner */
+        .install-banner { background: linear-gradient(to right, #1d4ed8, #2563eb); color: white; padding: 12px 16px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px rgba(29,78,216,0.3); margin-top: 20px;}
+    </style>
+</head>
+<body>
+
+    <!-- 1. SPLASH SCREEN -->
+    <div id="splash-screen" class="fixed inset-0 bg-blue-700 z-[3000] flex flex-col items-center justify-center text-white transition-opacity duration-500">
+        <i class="ph ph-shield-check text-7xl mb-4"></i>
+        <h1 class="text-3xl font-bold tracking-wider">MOBEEZY</h1>
+        <p class="text-blue-200 mt-2 text-sm font-medium tracking-wide">SCREEN GUARD</p>
+        <div class="mt-8 loader border-t-white border-blue-400"></div>
+    </div>
+
+    <!-- 2. LOGIN SCREEN -->
+    <div id="login-screen" class="fixed inset-0 bg-white z-[2000] hidden flex flex-col items-center justify-center px-6">
+        <div class="w-full max-w-sm">
+            <div class="text-center mb-8">
+                <i class="ph ph-shield-check text-6xl text-blue-700 mb-2"></i>
+                <h1 class="text-2xl font-bold text-gray-900">Mobeezy</h1>
+                <p class="text-gray-500 text-sm mt-1">Screen Guard Ordering System</p>
+            </div>
+            
+            <!-- Install App Banner (Hidden by default, shown by PWA logic) -->
+            <div id="install-app-banner" class="install-banner hidden mb-6 cursor-pointer" onclick="installApp()">
+                <div class="flex items-center gap-3">
+                    <i class="ph ph-download-simple text-2xl"></i>
+                    <div class="text-left">
+                        <p class="font-bold text-sm">Install App</p>
+                        <p class="text-[10px] text-blue-100">Add to Home Screen for faster access</p>
+                    </div>
+                </div>
+                <button class="bg-white text-blue-700 px-3 py-1 rounded text-xs font-bold uppercase">Install</button>
+            </div>
+
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <div class="relative">
+                        <i class="ph ph-user absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl"></i>
+                        <input type="text" id="login-user" class="input-box pl-12" placeholder="Username" required>
+                    </div>
+                </div>
+                <div>
+                    <div class="relative">
+                        <i class="ph ph-lock-key absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl"></i>
+                        <input type="password" id="login-pass" class="input-box pl-12" placeholder="Password" required>
+                        <i class="ph ph-eye absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl cursor-pointer" onclick="togglePassword()"></i>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between text-sm">
+                    <label class="flex items-center gap-2 text-gray-600"><input type="checkbox" id="login-remember" class="rounded text-blue-700 focus:ring-blue-700 w-4 h-4"> Remember me</label>
+                    <span class="text-blue-700 font-medium cursor-pointer" onclick="showToast('Please contact admin to reset password.')">Forgot Password?</span>
+                </div>
+                <button type="submit" class="btn btn-primary w-full py-3.5 text-base mt-4 shadow-md shadow-blue-500/30">LOGIN</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN APP WRAPPER -->
+    <div id="app-layout" class="hidden">
+        
+        <!-- HEADER -->
+        <header class="top-header">
+            <div class="flex items-center gap-4">
+                <button onclick="toggleMenu()" class="text-gray-700 p-1"><i class="ph ph-list text-2xl"></i></button>
+                <h1 id="header-title" class="text-lg font-bold text-gray-800">Dashboard</h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <button class="relative text-gray-600" onclick="showToast('No new alerts')"><i class="ph ph-bell text-2xl"></i><span class="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span></button>
+            </div>
+        </header>
+
+        <!-- SIDEBAR MENU -->
+        <div class="menu-overlay" onclick="toggleMenu()"></div>
+        <nav id="side-menu">
+            <div class="p-6 bg-gray-50 border-b border-gray-200">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-full bg-blue-700 text-white flex items-center justify-center text-xl font-bold" id="menu-avatar">M</div>
+                    <div>
+                        <h3 class="font-bold text-gray-900 truncate w-40" id="menu-name">User</h3>
+                        <p class="text-xs text-gray-500 font-medium" id="menu-role">Role</p>
+                    </div>
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto py-4" id="dynamic-sidebar">
+                <!-- Populated dynamically via JS -->
+            </div>
+            <div class="p-4 border-t border-gray-200">
+                <button onclick="logout()" class="flex items-center gap-3 text-red-500 font-semibold w-full px-4 py-2 rounded-lg hover:bg-red-50"><i class="ph ph-sign-out text-xl"></i> Logout</button>
+            </div>
+        </nav>
+
+        <!-- ==================== VIEWS ==================== -->
+        
+        <!-- DASHBOARD -->
+        <main id="view-dashboard" class="view-section px-4">
+            <!-- Customer Dashboard -->
+            <div id="dash-customer" class="hidden space-y-5">
+                <div class="bg-gradient-to-r from-blue-700 to-blue-600 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden">
+                    <div class="relative z-10">
+                        <p class="text-blue-100 text-sm font-medium mb-1">Current Balance</p>
+                        <h2 class="text-3xl font-bold tracking-tight" id="cust-dash-bal">₹ 0.00</h2>
+                    </div>
+                    <i class="ph ph-wallet absolute -right-4 -bottom-4 text-8xl text-white opacity-10"></i>
+                </div>
+                
+                <h3 class="font-bold text-gray-800 text-sm uppercase tracking-wide">Quick Actions</h3>
+                <div class="grid grid-cols-4 gap-3 text-center">
+                    <div onclick="navigate('catalog')" class="flex flex-col items-center gap-2 cursor-pointer"><div class="w-14 h-14 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center text-2xl shadow-sm border border-blue-100"><i class="ph ph-package"></i></div><span class="text-xs font-medium text-gray-700">Order</span></div>
+                    <div onclick="navigate('orders')" class="flex flex-col items-center gap-2 cursor-pointer"><div class="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-2xl shadow-sm border border-emerald-100"><i class="ph ph-receipt"></i></div><span class="text-xs font-medium text-gray-700">Orders</span></div>
+                    <div onclick="navigate('rates')" class="flex flex-col items-center gap-2 cursor-pointer"><div class="w-14 h-14 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center text-2xl shadow-sm border border-purple-100"><i class="ph ph-tag"></i></div><span class="text-xs font-medium text-gray-700">Rates</span></div>
+                    <div onclick="navigate('statement')" class="flex flex-col items-center gap-2 cursor-pointer"><div class="w-14 h-14 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center text-2xl shadow-sm border border-orange-100"><i class="ph ph-file-text"></i></div><span class="text-xs font-medium text-gray-700">Statement</span></div>
+                </div>
+
+                <h3 class="font-bold text-gray-800 text-sm uppercase tracking-wide mt-6 mb-2">Notifications</h3>
+                <div id="cust-notifications-panel" class="mb-4"></div>
+
+                <div class="flex justify-between items-end mt-4">
+                    <h3 class="font-bold text-gray-800 text-sm uppercase tracking-wide">Recent Orders</h3>
+                    <span class="text-xs text-blue-700 font-semibold cursor-pointer" onclick="navigate('orders')">View All</span>
+                </div>
+                <div id="cust-recent-orders" class="space-y-3"></div>
+            </div>
+
+            <!-- Admin Dashboard -->
+            <div id="dash-admin" class="hidden space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="mobile-card !mb-0 border-l-4 border-l-blue-700">
+                        <p class="text-xs text-gray-500 font-semibold uppercase mb-1">Total Orders</p>
+                        <h3 class="text-xl font-bold" id="admin-dash-orders">0</h3>
+                    </div>
+                    <div class="mobile-card !mb-0 border-l-4 border-l-emerald-500">
+                        <p class="text-xs text-gray-500 font-semibold uppercase mb-1">Today's Sales</p>
+                        <h3 class="text-xl font-bold" id="admin-dash-sales">₹ 0</h3>
+                    </div>
+                    <div class="mobile-card !mb-0 border-l-4 border-l-purple-500">
+                        <p class="text-xs text-gray-500 font-semibold uppercase mb-1">Total Customers</p>
+                        <h3 class="text-xl font-bold" id="admin-dash-custs">0</h3>
+                    </div>
+                    <div class="mobile-card !mb-0 border-l-4 border-l-amber-500">
+                        <p class="text-xs text-gray-500 font-semibold uppercase mb-1">Pending Orders</p>
+                        <h3 class="text-xl font-bold" id="admin-dash-pending">0</h3>
+                    </div>
+                </div>
+
+                <h3 class="font-bold text-gray-800 text-sm uppercase tracking-wide mt-6 mb-2">Quick Actions</h3>
+                <div class="grid grid-cols-4 gap-3 text-center">
+                    <div onclick="navigate('list-users')" class="flex flex-col items-center gap-2 cursor-pointer"><div class="w-14 h-14 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center text-2xl shadow-sm border border-blue-100"><i class="ph ph-users"></i></div><span class="text-xs font-medium text-gray-700">Users</span></div>
+                    <div onclick="navigate('list-products')" class="flex flex-col items-center gap-2 cursor-pointer"><div class="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-2xl shadow-sm border border-emerald-100"><i class="ph ph-box-top"></i></div><span class="text-xs font-medium text-gray-700">Products</span></div>
+                    <div onclick="navigate('list-universals')" class="flex flex-col items-center gap-2 cursor-pointer"><div class="w-14 h-14 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center text-2xl shadow-sm border border-purple-100"><i class="ph ph-globe"></i></div><span class="text-xs font-medium text-gray-700">Universal</span></div>
+                    <div onclick="navigate('list-rates')" class="flex flex-col items-center gap-2 cursor-pointer"><div class="w-14 h-14 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center text-2xl shadow-sm border border-orange-100"><i class="ph ph-tag"></i></div><span class="text-xs font-medium text-gray-700">Rates</span></div>
+                </div>
+
+                <h3 class="font-bold text-gray-800 text-sm uppercase tracking-wide mt-6 mb-2">Live Notifications</h3>
+                <div id="admin-notif-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
+            </div>
+
+            <!-- Staff Dashboard -->
+            <div id="dash-staff" class="hidden space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="mobile-card !mb-0 border-l-4 border-l-amber-500 cursor-pointer" onclick="navigate('orders')">
+                        <p class="text-xs text-gray-500 font-semibold uppercase mb-1">Pending Orders</p>
+                        <h3 class="text-2xl font-bold" id="staff-dash-pending">0</h3>
+                    </div>
+                    <div class="mobile-card !mb-0 border-l-4 border-l-emerald-500">
+                        <p class="text-xs text-gray-500 font-semibold uppercase mb-1">Packed Today</p>
+                        <h3 class="text-2xl font-bold">--</h3>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- PROFIT CENTER -->
+        <main id="view-profit" class="view-section px-4">
+            <div id="profit-auth-panel" class="flex flex-col items-center justify-center py-20 text-center">
+                <i class="ph ph-lock-key text-5xl text-blue-700 mb-4"></i>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">Secure Profit Center</h3>
+                <p class="text-sm text-gray-500 mb-6">Please enter the master password to view analytics.</p>
+                <input type="password" id="profit-auth-pwd" class="input-box text-center mb-4" placeholder="Enter Password">
+                <button class="btn btn-primary w-full py-3" onclick="unlockProfitCenter()">Unlock Data</button>
+            </div>
+            
+            <div id="profit-main-panel" class="hidden space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="mobile-card !mb-0 border-l-4 border-l-emerald-500"><p class="text-[10px] text-gray-500 font-semibold uppercase">Total Sales</p><h3 class="text-lg font-bold text-emerald-600" id="prof-sales">₹ 0</h3></div>
+                    <div class="mobile-card !mb-0 border-l-4 border-l-red-500"><p class="text-[10px] text-gray-500 font-semibold uppercase">Total Cost</p><h3 class="text-lg font-bold text-red-600" id="prof-cost">₹ 0</h3></div>
+                    <div class="mobile-card !mb-0 border-l-4 border-l-blue-700"><p class="text-[10px] text-gray-500 font-semibold uppercase">Net Profit</p><h3 class="text-lg font-bold text-blue-700" id="prof-profit">₹ 0</h3></div>
+                    <div class="mobile-card !mb-0 border-l-4 border-l-purple-500"><p class="text-[10px] text-gray-500 font-semibold uppercase">Margin</p><h3 class="text-lg font-bold text-purple-700" id="prof-margin">0%</h3></div>
+                </div>
+                <div class="mobile-card !p-3">
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">Group By</label>
+                    <select id="prof-group-by" class="input-box py-2" onchange="renderProfitCards()">
+                        <option value="Order Date">Daily</option>
+                        <option value="Customer Name">Customer Wise</option>
+                        <option value="Product Title">Product Wise</option>
+                        <option value="Universal Name">Universal Wise</option>
+                    </select>
+                </div>
+                <div id="profit-list" class="space-y-3 pb-6"></div>
+            </div>
+        </main>
+
+        <!-- CATALOG / PLACE ORDER -->
+        <main id="view-catalog" class="view-section slide-active px-4">
+            <div id="order-customer-select-block" class="mb-4 hidden">
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Select Customer</label>
+                <select id="catalog-cust-select" class="input-box bg-white" onchange="loadCatalog()"></select>
+            </div>
+            
+            <div class="flex gap-2 mb-4">
+                <select id="catalog-company" class="input-box bg-white flex-1 text-sm py-2" onchange="filterMobileCatalog()"><option value="">All Brands</option></select>
+                <select id="catalog-vertical" class="input-box bg-white flex-1 text-sm py-2" onchange="filterMobileCatalog()"><option value="">All Verticals</option></select>
+            </div>
+            <div class="relative mb-4">
+                <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                <input type="text" id="catalog-search" class="input-box pl-9 py-2" placeholder="Search product..." onkeyup="filterMobileCatalog()">
+            </div>
+            
+            <div id="mobile-product-list" class="space-y-3 pb-20"></div>
+            
+            <div class="fixed bottom-[65px] left-0 w-full p-4 bg-white border-t border-gray-200 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] flex justify-between items-center z-30">
+                <div>
+                    <p class="text-xs text-gray-500 font-medium">Cart Total</p>
+                    <h3 class="text-lg font-bold text-blue-700" id="cart-floating-total">₹ 0.00 (<span id="cart-floating-count">0</span> items)</h3>
+                </div>
+                <button class="btn btn-primary px-6 py-2.5" onclick="navigate('cart')">View Cart</button>
+            </div>
+        </main>
+
+        <!-- PLACE ORDER: MATERIAL SELECTION -->
+        <main id="view-material" class="view-section slide-active px-4">
+            <div class="flex items-center gap-3 mb-6 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                <img id="mat-prod-img" src="" class="w-16 h-16 rounded-lg object-cover bg-gray-100 cursor-pointer" onclick="openGalleryFromWizard()">
+                <div>
+                    <h2 class="font-bold text-gray-900 leading-tight" id="mat-prod-title">Product Title</h2>
+                    <p class="text-xs text-gray-500" id="mat-prod-sub">Company / Universal</p>
+                </div>
+            </div>
+            <h3 class="font-bold text-gray-800 text-sm uppercase mb-3">Select Material</h3>
+            <div id="material-radio-list" class="space-y-2 mb-20 radio-card"></div>
+            <div class="fixed bottom-0 left-0 w-full p-4 bg-white border-t border-gray-200 z-50">
+                <button class="btn btn-primary w-full py-3.5 text-base" onclick="goToQuantity()">NEXT</button>
+            </div>
+        </main>
+
+        <!-- PLACE ORDER: QUANTITY -->
+        <main id="view-quantity" class="view-section slide-active px-4">
+            <div class="mobile-card flex flex-col items-center text-center py-8">
+                <img id="qty-prod-img" src="" class="w-32 h-32 rounded-xl object-cover bg-gray-100 shadow-sm mb-4">
+                <h2 class="text-xl font-bold text-gray-900" id="qty-prod-title">Product Title</h2>
+                <div class="flex gap-2 items-center mt-2 mb-6">
+                    <span class="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold border border-blue-100" id="qty-prod-mat">Material</span>
+                    <span class="font-bold text-gray-700" id="qty-prod-rate">₹ 0.00</span>
+                </div>
+                
+                <p class="text-sm text-gray-500 mb-2 font-medium">Enter Quantity</p>
+                <div class="stepper mb-2">
+                    <button type="button" onclick="changeQty(-1)">-</button>
+                    <input type="number" id="qty-input-val" value="1" min="1" onchange="updateQtyTotal()">
+                    <button type="button" onclick="changeQty(1)">+</button>
+                </div>
+                <div class="text-sm font-bold text-blue-700 mt-4" id="qty-line-total">Total: ₹ 0.00</div>
+            </div>
+            <div class="fixed bottom-0 left-0 w-full p-4 bg-white border-t border-gray-200 z-50 flex gap-3">
+                <button class="btn btn-secondary flex-1 py-3.5" onclick="navigate('catalog')">Cancel</button>
+                <button class="btn btn-primary flex-1 py-3.5" onclick="addToCart()">ADD TO CART</button>
+            </div>
+        </main>
+
+        <!-- PLACE ORDER: CART & CHECKOUT -->
+        <main id="view-cart" class="view-section slide-active px-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold">Your Cart (<span id="cart-item-count">0</span>)</h2>
+                <button class="text-blue-700 text-sm font-bold" onclick="navigate('catalog')">+ Add More</button>
+            </div>
+            <div id="cart-items-container" class="space-y-3 mb-6"></div>
+            <div class="mobile-card">
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-2">Special Message / Remarks</label>
+                <textarea id="cart-remarks" class="input-box text-sm" rows="2" placeholder="Any instructions..."></textarea>
+            </div>
+            <div class="mb-24 mobile-card bg-gray-50 border-dashed border-gray-300">
+                <div class="flex justify-between text-sm text-gray-600 mb-2"><span>Total Items</span><strong id="cart-summary-items">0</strong></div>
+                <div class="flex justify-between text-sm text-gray-600 mb-3 pb-3 border-b border-gray-200"><span>Total Quantity</span><strong id="cart-summary-qty">0</strong></div>
+                <div class="flex justify-between items-end">
+                    <span class="font-semibold text-gray-800">Grand Total</span>
+                    <strong class="text-xl text-blue-700" id="cart-summary-total">₹ 0.00</strong>
+                </div>
+            </div>
+            <div class="fixed bottom-[65px] left-0 w-full p-4 bg-white border-t border-gray-200 z-30">
+                <button class="btn btn-primary w-full py-3.5 text-base shadow-md shadow-blue-500/30" onclick="submitMobileOrder()">PLACE ORDER</button>
+            </div>
+        </main>
+
+        <!-- MY ORDERS -->
+        <main id="view-orders" class="view-section px-4">
+            <div class="flex gap-2 overflow-x-auto pb-2 mb-4 hide-scrollbar" id="order-status-tabs">
+                <button class="px-4 py-1.5 rounded-full text-sm font-medium bg-blue-700 text-white whitespace-nowrap" onclick="filterMobileOrders('All', this)">All</button>
+                <button class="px-4 py-1.5 rounded-full text-sm font-medium bg-white border border-gray-200 text-gray-600 whitespace-nowrap" onclick="filterMobileOrders('Pending', this)">Pending</button>
+                <button class="px-4 py-1.5 rounded-full text-sm font-medium bg-white border border-gray-200 text-gray-600 whitespace-nowrap" onclick="filterMobileOrders('Partial', this)">Partial</button>
+                <button class="px-4 py-1.5 rounded-full text-sm font-medium bg-white border border-gray-200 text-gray-600 whitespace-nowrap" onclick="filterMobileOrders('Completed', this)">Completed</button>
+            </div>
+            <div id="mobile-orders-list" class="space-y-3 pb-4"></div>
+        </main>
+
+        <!-- ORDER DETAILS EXPANDED -->
+        <main id="view-order-details" class="view-section slide-active px-4">
+            <div class="mobile-card !bg-gray-50 mb-4">
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <h2 class="text-lg font-bold text-blue-700" id="od-id">ORD-0000</h2>
+                        <p class="text-xs text-gray-500" id="od-date">Date</p>
+                    </div>
+                    <span class="badge badge-pending" id="od-status">Pending</span>
+                </div>
+                <div class="text-sm text-gray-800 font-semibold mb-2 hidden" id="od-customer-name"></div>
+                <div class="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
+                    <span class="text-gray-500">Items: <strong class="text-gray-800" id="od-items">0</strong></span>
+                    <span class="text-gray-500">Total: <strong class="text-blue-700" id="od-amount">₹ 0.00</strong></span>
+                </div>
+            </div>
+            <h3 class="font-bold text-gray-800 text-sm uppercase tracking-wide mb-3">Order Items</h3>
+            <div id="od-items-list" class="space-y-3 pb-20"></div>
+            
+            <div id="od-admin-actions" class="fixed bottom-[65px] left-0 w-full p-4 bg-white border-t border-gray-200 z-30 hidden">
+                <button class="btn btn-primary w-full py-3" onclick="saveStaffOrderUpdates()">SAVE PACKING UPDATES</button>
+            </div>
+        </main>
+
+        <!-- MY RATES -->
+        <main id="view-rates" class="view-section px-4">
+            <div class="relative mb-4">
+                <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                <input type="text" id="rates-search" class="input-box pl-9 py-2" placeholder="Search product or material..." onkeyup="filterMobileRates()">
+            </div>
+            <div id="mobile-rates-list" class="space-y-3"></div>
+        </main>
+
+        <!-- STATEMENT -->
+        <main id="view-statement" class="view-section px-4">
+            <div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-5 text-white shadow-md mb-6">
+                <p class="text-gray-300 text-xs font-medium uppercase tracking-wide mb-1">Running Balance</p>
+                <h2 class="text-3xl font-bold mb-4" id="stmt-bal-val">₹ 0.00</h2>
+                <div class="flex gap-4 border-t border-gray-700 pt-3">
+                    <div class="flex-1">
+                        <p class="text-[10px] text-gray-400">Total Sales</p>
+                        <p class="font-semibold text-red-400" id="stmt-sales-val">₹ 0.00</p>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-[10px] text-gray-400">Total Paid</p>
+                        <p class="font-semibold text-emerald-400" id="stmt-paid-val">₹ 0.00</p>
+                    </div>
+                </div>
+            </div>
+            <h3 class="font-bold text-gray-800 text-sm uppercase tracking-wide mb-3">Transactions</h3>
+            <div id="mobile-stmt-list" class="space-y-3 pb-4"></div>
+        </main>
+
+        <!-- GENERIC LIST VIEWS (Admin/Masters) -->
+        <main id="view-generic-list" class="view-section px-4">
+            <div class="flex justify-between items-center mb-4">
+                <div class="relative flex-1 mr-3">
+                    <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <input type="text" id="generic-search" class="input-box pl-9 py-2" placeholder="Search..." onkeyup="filterGenericList()">
+                </div>
+                <button class="w-10 h-10 rounded-full bg-blue-700 text-white flex items-center justify-center shadow-md flex-shrink-0" onclick="triggerGenericAdd()"><i class="ph ph-plus text-xl"></i></button>
+            </div>
+            <div id="generic-list-container" class="space-y-3 pb-4"></div>
+        </main>
+        
+        <!-- REPORTS -->
+        <main id="view-reports" class="view-section px-4">
+            <div class="mobile-card !p-3 mb-4">
+                <label class="block text-xs font-semibold text-gray-500 mb-1">Report Type</label>
+                <select id="report-type" class="input-box py-2" onchange="generateMobileReport()">
+                    <option value="sales">Sales Report</option>
+                    <option value="payments">Collections Report</option>
+                </select>
+            </div>
+            <div id="mobile-report-list" class="space-y-3 pb-6"></div>
+        </main>
+
+        <!-- SETTINGS -->
+        <main id="view-settings" class="view-section px-4">
+            <div class="mobile-card">
+                <h3 class="text-gray-900 font-bold mb-2">Data Backup</h3>
+                <p class="text-xs text-gray-500 mb-4">Create a secure JSON backup from Cloud database.</p>
+                <button class="btn btn-primary w-full py-3" onclick="createBackup()">Create System Backup</button>
+            </div>
+            <div class="mobile-card">
+                <h3 class="text-gray-900 font-bold mb-2">Profit Security</h3>
+                <p class="text-xs text-gray-500 mb-4">Update the master profit password.</p>
+                <input type="password" id="setting-profit-pwd" class="input-box mb-3" placeholder="Enter new password">
+                <button class="btn btn-secondary w-full py-3" onclick="updateProfitPassword()">Update Password</button>
+            </div>
+        </main>
+
+        <!-- BOTTOM NAVIGATION -->
+        <nav class="bottom-nav" id="bottom-nav-bar">
+            <!-- Dynamic based on role -->
+        </nav>
+    </div>
+
+    <!-- FULLSCREEN IMAGE GALLERY -->
+    <div id="gallery-modal">
+        <div class="absolute top-0 left-0 w-full p-4 flex justify-between items-center z-50 bg-gradient-to-b from-black/60 to-transparent text-white">
+            <span class="text-sm font-semibold" id="gallery-counter">1 / 1</span>
+            <button onclick="closeGallery()" class="p-2"><i class="ph ph-x text-2xl"></i></button>
+        </div>
+        <div class="gallery-img-container" id="gallery-touch-area">
+            <img id="gallery-main-img" src="">
+        </div>
+        <div class="absolute top-1/2 -translate-y-1/2 w-full flex justify-between px-2 pointer-events-none">
+            <button class="w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center backdrop-blur-sm pointer-events-auto" id="gallery-prev" onclick="navGallery(-1)"><i class="ph ph-caret-left text-xl"></i></button>
+            <button class="w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center backdrop-blur-sm pointer-events-auto" id="gallery-next" onclick="navGallery(1)"><i class="ph ph-caret-right text-xl"></i></button>
+        </div>
+        <div class="gallery-strip" id="gallery-thumb-strip"></div>
+    </div>
+
+    <!-- SCRIPT -->
+    <script>
+        // GLOBALS
+        let currentUser = null;
+        let activeView = '';
+        
+        // Data Caches
+        let catalogProducts = [];
+        let globalVerticals = [];
+        let myOrders = [];
+        let orderDetailsCache = null;
+        let prodData = []; 
+        let rawProfitData = [];
+        let genericListData = [];
+        let currentListType = '';
+        
+        // Cart State
+        let cart = [];
+        let wizardProduct = null;
+        let wizardMaterial = null;
+
+        // ==========================================
+        // CLOUD API CONFIGURATION
+        // ==========================================
+        const API_BASE_URL = "https://mobeezy-backend.onrender.com/api";
+
+        const api = new Proxy({}, {
+            get: (target, prop) => async (...args) => {
+                try {
+                    const res = await fetch(`${API_BASE_URL}/${prop}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(args)
+                    });
+                    return await res.json();
+                } catch (e) {
+                    console.error(`API Error [${prop}]:`, e);
+                    return { success: false, error: "Network Error! Server se connect nahi ho pa raha." };
+                }
+            }
+        });
+
+        // ==========================================
+        // TOAST NOTIFICATION SYSTEM
+        // ==========================================
+        function showToast(message, type = 'info') {
+            const existing = document.getElementById('sg-toast');
+            if (existing) existing.remove();
+
+            const toast = document.createElement('div');
+            toast.id = 'sg-toast';
+            toast.className = `fixed top-4 left-1/2 -translate-x-1/2 z-[9999] px-6 py-3 rounded-lg shadow-xl text-white text-sm font-bold transition-all duration-300 transform scale-95 opacity-0 flex items-center gap-2 max-w-[90vw] w-max`;
+            
+            if (type === 'error' || message.includes('❌') || message.toLowerCase().includes('failed') || message.toLowerCase().includes('error')) {
+                toast.classList.add('bg-red-600');
+            } else if (type === 'success' || message.includes('✅') || message.toLowerCase().includes('success')) {
+                toast.classList.add('bg-emerald-600');
+            } else {
+                toast.classList.add('bg-gray-800');
+            }
+            
+            toast.innerText = message;
+            document.body.appendChild(toast);
+            
+            // Animate in
+            setTimeout(() => {
+                toast.classList.remove('scale-95', 'opacity-0');
+                toast.classList.add('scale-100', 'opacity-100');
+            }, 10);
+            
+            // Animate out
+            setTimeout(() => { 
+                toast.classList.remove('scale-100', 'opacity-100');
+                toast.classList.add('scale-95', 'opacity-0');
+                setTimeout(() => toast.remove(), 300); 
+            }, 3000);
+        }
+
+        // ==========================================
+        // PWA (DOWNLOADABLE APP) INSTALL LOGIC
+        // ==========================================
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            // Show the install banner on the login screen
+            const installBanner = document.getElementById('install-app-banner');
+            if(installBanner) installBanner.classList.remove('hidden');
+        });
+
+        async function installApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    showToast("✅ App Installation Started!");
+                    document.getElementById('install-app-banner').classList.add('hidden');
+                }
+                deferredPrompt = null;
+            } else {
+                // Manual instructions for iOS Safari
+                showToast("Tap 'Share' then 'Add to Home Screen' to install.", 'info');
+            }
+        }
+
+        // INIT
+        window.addEventListener('DOMContentLoaded', async () => {
+            // Check session
+            const session = localStorage.getItem('sg_mobile_session');
+            if (session) {
+                currentUser = JSON.parse(session);
+                await initializeData();
+                launchApp();
+            } else {
+                setTimeout(() => {
+                    document.getElementById('splash-screen').style.opacity = '0';
+                    setTimeout(() => {
+                        document.getElementById('splash-screen').classList.add('hidden');
+                        document.getElementById('login-screen').classList.remove('hidden');
+                    }, 500);
+                }, 1000);
+            }
+            initGalleryTouch();
+        });
+
+        // LOGIN
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const u = document.getElementById('login-user').value;
+            const p = document.getElementById('login-pass').value;
+            const r = document.getElementById('login-remember').checked;
+            
+            const btn = e.target.querySelector('button');
+            btn.innerHTML = '<div class="loader w-5 h-5 border-2 border-white mx-auto"></div>';
+            
+            try {
+                const res = await api.login(u, p);
+                btn.innerHTML = 'LOGIN';
+                
+                if (res.success) {
+                    currentUser = res.user;
+                    if (r) localStorage.setItem('sg_mobile_session', JSON.stringify(currentUser));
+                    document.getElementById('login-screen').classList.add('hidden');
+                    await initializeData();
+                    launchApp();
+                    showToast(`Welcome, ${currentUser['User Name']}!`, 'success');
+                } else {
+                    showToast(res.error, 'error');
+                }
+            } catch(e) {
+                btn.innerHTML = 'LOGIN';
+                showToast("Login Error: Bridge communication failed.", 'error');
+            }
+        });
+
+        function logout() {
+            localStorage.removeItem('sg_mobile_session');
+            currentUser = null;
+            document.getElementById('app-layout').classList.add('hidden');
+            document.getElementById('side-menu').classList.remove('open');
+            document.querySelector('.menu-overlay').classList.remove('open');
+            document.getElementById('login-screen').classList.remove('hidden');
+            showToast("Logged out safely.");
+        }
+
+        async function initializeData() {
+            document.getElementById('splash-screen').classList.remove('hidden');
+            document.getElementById('splash-screen').style.opacity = '1';
+            try {
+                globalVerticals = await api.get_active_verticals();
+                prodData = await api.get_products();
+            } catch(e) { console.error(e); }
+        }
+
+        function launchApp() {
+            document.getElementById('splash-screen').classList.add('hidden');
+            document.getElementById('app-layout').classList.remove('hidden');
+            
+            document.getElementById('menu-name').innerText = currentUser['User Name'];
+            document.getElementById('menu-role').innerText = currentUser.Role;
+            document.getElementById('menu-avatar').innerText = currentUser['User Name'].charAt(0).toUpperCase();
+
+            buildNavigation();
+            navigate('dashboard');
+        }
+
+        // NAVIGATION LOGIC
+        function buildNavigation() {
+            const role = currentUser.Role;
+            const side = document.getElementById('dynamic-sidebar');
+            const bot = document.getElementById('bottom-nav-bar');
+            side.innerHTML = ''; bot.innerHTML = '';
+
+            const addSide = (icon, text, target) => {
+                side.innerHTML += `<button onclick="navigate('${target}'); toggleMenu();" class="flex items-center gap-3 w-full px-6 py-3 text-gray-700 font-medium hover:bg-blue-50 hover:text-blue-700 transition-colors"><i class="ph ${icon} text-xl"></i> ${text}</button>`;
+            };
+
+            const addBot = (icon, text, target) => {
+                bot.innerHTML += `<div class="nav-item" id="nav-${target}" onclick="navigate('${target}')"><i class="ph ${icon}"></i><span>${text}</span></div>`;
+            };
+
+            if (role === 'Customer') {
+                addSide('ph-squares-four', 'Dashboard', 'dashboard');
+                addSide('ph-package', 'Place Order', 'catalog');
+                addSide('ph-receipt', 'My Orders', 'orders');
+                addSide('ph-tag', 'My Rates', 'rates');
+                addSide('ph-file-text', 'Statement', 'statement');
+                
+                addBot('ph-squares-four', 'Home', 'dashboard');
+                addBot('ph-package', 'Order', 'catalog');
+                addBot('ph-receipt', 'Orders', 'orders');
+                addBot('ph-user', 'Profile', 'profile');
+            } else if (role === 'Admin') {
+                addSide('ph-squares-four', 'Dashboard', 'dashboard');
+                addSide('ph-users', 'Customers', 'list-customers');
+                addSide('ph-receipt', 'Orders', 'orders');
+                addSide('ph-box-top', 'Products', 'list-products');
+                addSide('ph-tag', 'Rate Mapping', 'list-rates');
+                addSide('ph-money', 'Ledger', 'list-ledger');
+                addSide('ph-wallet', 'Payments', 'list-payments');
+                addSide('ph-chart-line-up', 'Reports', 'reports');
+                if(currentUser['Can View Profit'] === 'Yes') addSide('ph-lock-key', 'Profit Center', 'profit');
+                addSide('ph-users-three', 'Users Master', 'list-users');
+                addSide('ph-list-dashes', 'Verticals Master', 'list-verticals');
+                addSide('ph-globe', 'Universal Master', 'list-universals');
+                addSide('ph-gear', 'Settings', 'settings');
+                
+                addBot('ph-squares-four', 'Home', 'dashboard');
+                addBot('ph-receipt', 'Orders', 'orders');
+                addBot('ph-users', 'Users', 'list-customers');
+                addBot('ph-box-top', 'Products', 'list-products');
+            } else {
+                addSide('ph-squares-four', 'Dashboard', 'dashboard');
+                addSide('ph-package', 'Place Order', 'catalog');
+                addSide('ph-receipt', 'Orders Queue', 'orders');
+                if(currentUser['Can Add Ledger'] === 'Yes') addSide('ph-money', 'Ledger', 'list-ledger');
+                
+                addBot('ph-squares-four', 'Home', 'dashboard');
+                addBot('ph-receipt', 'Orders', 'orders');
+                addBot('ph-package', 'Order Entry', 'catalog');
+            }
+        }
+
+        function toggleMenu() {
+            document.getElementById('side-menu').classList.toggle('open');
+            document.querySelector('.menu-overlay').classList.toggle('open');
+        }
+
+        function updateBottomNav(target) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active', 'text-blue-700'));
+            const active = document.getElementById(`nav-${target}`);
+            if(active) active.classList.add('active', 'text-blue-700');
+        }
+
+        function navigate(target, back=false) {
+            document.querySelectorAll('.view-section').forEach(el => { el.classList.remove('active', 'slide-active'); });
+
+            let actualTargetId = `view-${target}`;
+            if(target.startsWith('list-')) actualTargetId = 'view-generic-list';
+            
+            const targetEl = document.getElementById(actualTargetId);
+            if(targetEl) {
+                targetEl.classList.add(back ? 'active' : 'slide-active');
+                
+                const titles = { 'dashboard': 'Dashboard', 'catalog': 'Select Product', 'material': 'Select Material', 'quantity': 'Enter Quantity', 'cart': 'Review Cart', 'orders': 'Orders', 'order-details': 'Order Details', 'rates': 'My Rates', 'statement': 'Statement', 'profit': 'Profit Center', 'reports': 'Reports', 'settings': 'System Settings', 'list-customers': 'Customers', 'list-products': 'Products Master', 'list-users': 'Users Master', 'list-verticals': 'Verticals', 'list-universals': 'Universal Master', 'list-ledger': 'Customer Accounts', 'list-payments': 'Payment Center', 'list-rates': 'Rate Mapping' };
+                document.getElementById('header-title').innerText = titles[target] || 'Mobeezy App';
+                
+                updateBottomNav(target);
+                activeView = target;
+
+                try {
+                    if(target === 'dashboard') loadDashboard();
+                    else if(target === 'catalog') initCatalog();
+                    else if(target === 'orders') loadOrders();
+                    else if(target === 'rates') loadRates();
+                    else if(target === 'statement') loadStatement();
+                    else if(target === 'reports') generateMobileReport();
+                    else if(target === 'profit') { document.getElementById('profit-auth-panel').classList.remove('hidden'); document.getElementById('profit-main-panel').classList.add('hidden'); document.getElementById('profit-auth-pwd').value = ''; }
+                    else if(target.startsWith('list-')) loadGenericList(target);
+                } catch(e) { console.error(e); }
+                
+                window.scrollTo(0,0);
+            }
+        }
+
+        function copyText(text) {
+            if(!text) return;
+            const input = document.createElement('input'); input.value = text; document.body.appendChild(input); input.select(); document.execCommand('copy'); document.body.removeChild(input);
+            showToast("✅ File path copied to clipboard!");
+        }
+
+        // ==================== DASHBOARD ====================
+        async function loadDashboard() {
+            document.getElementById('dash-customer').classList.add('hidden');
+            document.getElementById('dash-admin').classList.add('hidden');
+            document.getElementById('dash-staff').classList.add('hidden');
+
+            const stats = await api.get_dashboard_stats(currentUser.Role, currentUser['User ID']);
+            
+            if(currentUser.Role === 'Customer') {
+                document.getElementById('dash-customer').classList.remove('hidden');
+                document.getElementById('cust-dash-bal').innerText = `₹ ${parseFloat(stats.outstanding||0).toFixed(2)}`;
+                
+                const custNotif = document.getElementById('cust-notifications-panel');
+                custNotif.innerHTML = '';
+                if(stats.recent_orders && stats.recent_orders.length > 0) {
+                    stats.recent_orders.slice(0,3).forEach(o => {
+                        let msg = o.Status === 'Completed' ? `🎉 Congratulations! Your Order #${o['Order ID']} has been completed successfully.` : `Order #${o['Order ID']} is currently ${o.Status}.`;
+                        custNotif.innerHTML += `<div class="p-3 bg-white rounded-lg border-l-4 border-blue-500 shadow-sm text-sm text-gray-700 mb-2">${msg}</div>`;
+                    });
+                } else {
+                    custNotif.innerHTML = '<p class="text-sm text-gray-500">No recent updates.</p>';
+                }
+
+                const recContainer = document.getElementById('cust-recent-orders');
+                recContainer.innerHTML = '';
+                if(stats.recent_orders && stats.recent_orders.length > 0) {
+                    stats.recent_orders.forEach(o => {
+                        let stClass = o.Status==='Completed' ? 'badge-completed' : (o.Status==='Partial'?'badge-partial':'badge-pending');
+                        recContainer.innerHTML += `
+                            <div class="mobile-card !mb-2 flex justify-between items-center cursor-pointer active:scale-[0.99]" onclick="openOrderDetails('${o['Order ID']}')">
+                                <div>
+                                    <h4 class="font-bold text-gray-800">${o['Order ID']}</h4>
+                                    <p class="text-xs text-gray-500">${o['Order Date']} • ${o['Total Items']} Items</p>
+                                </div>
+                                <div class="text-right">
+                                    <div class="font-bold text-blue-700 mb-1">₹ ${parseFloat(o['Grand Total']||0).toFixed(2)}</div>
+                                    <span class="badge ${stClass}">${o.Status}</span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    recContainer.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">No recent orders.</p>';
+                }
+            } else if (currentUser.Role === 'Admin') {
+                document.getElementById('dash-admin').classList.remove('hidden');
+                document.getElementById('admin-dash-orders').innerText = stats.pending_orders || 0; 
+                document.getElementById('admin-dash-sales').innerText = `₹ ${parseFloat(stats.today_sales||0).toFixed(2)}`;
+                document.getElementById('admin-dash-custs').innerText = stats.customers || 0;
+                document.getElementById('admin-dash-pending').innerText = stats.pending_orders || 0;
+
+                const notifPanel = document.getElementById('admin-notif-list');
+                notifPanel.innerHTML = '';
+                if(stats.notifications && stats.notifications.length > 0) {
+                    stats.notifications.forEach(n => {
+                        let badge = n['Is Read'] === 'No' ? `<span class="w-2 h-2 rounded-full bg-red-500 inline-block mr-2"></span>` : '';
+                        notifPanel.innerHTML += `<div class="p-3 bg-white rounded-lg border border-gray-100 shadow-sm text-sm mb-2"><div class="flex items-center mb-1">${badge}<span class="font-bold text-gray-800">${n['Date Time']}</span></div><p class="text-gray-600">${n.Message}</p></div>`;
+                    });
+                } else {
+                    notifPanel.innerHTML = '<p class="text-sm text-gray-500 py-2">No recent notifications.</p>';
+                }
+
+            } else {
+                document.getElementById('dash-staff').classList.remove('hidden');
+                document.getElementById('staff-dash-pending').innerText = stats.pending_orders || 0;
+            }
+        }
+
+        // ==================== PLACE ORDER FLOW ====================
+        async function initCatalog() {
+            if(currentUser.Role !== 'Customer') {
+                document.getElementById('order-customer-select-block').classList.remove('hidden');
+                const custs = await api.get_active_customers();
+                const sel = document.getElementById('catalog-cust-select');
+                if(sel.options.length === 0) {
+                    sel.innerHTML = '<option value="">Select Customer</option>';
+                    custs.forEach(c => sel.innerHTML += `<option value="${c['User ID']}">${c['User Name']}</option>`);
+                }
+                if(!sel.value) return; 
+            } else {
+                document.getElementById('order-customer-select-block').classList.add('hidden');
+            }
+            loadCatalog();
+            updateCartFloating();
+        }
+
+        async function loadCatalog() {
+            let cid = currentUser.Role === 'Customer' ? currentUser['User ID'] : document.getElementById('catalog-cust-select').value;
+            if(!cid) return;
+            
+            const res = await api.get_order_entry_data(cid);
+            if(res.success) {
+                catalogProducts = res.products;
+                
+                let comps = new Set();
+                catalogProducts.forEach(p => { if(p.Company) comps.add(p.Company); });
+                const compSel = document.getElementById('catalog-company');
+                compSel.innerHTML = '<option value="">All Brands</option>';
+                [...comps].sort().forEach(c => compSel.innerHTML += `<option value="${c}">${c}</option>`);
+                
+                const vertSel = document.getElementById('catalog-vertical');
+                vertSel.innerHTML = '<option value="">All Verticals</option>';
+                globalVerticals.forEach(v => vertSel.innerHTML += `<option value="${v}">${v}</option>`);
+                
+                filterMobileCatalog();
+            }
+        }
+
+        function filterMobileCatalog() {
+            const fComp = document.getElementById('catalog-company').value;
+            const fVert = document.getElementById('catalog-vertical').value;
+            const q = document.getElementById('catalog-search').value.toLowerCase();
+            const list = document.getElementById('mobile-product-list');
+            list.innerHTML = '';
+            
+            let filtered = catalogProducts.filter(p => {
+                if(fComp && p.Company !== fComp) return false;
+                if(fVert && p.Vertical !== fVert) return false;
+                if(q) {
+                    let str = `${p['Product Title']} ${p.Company} ${p['Universal Name']}`.toLowerCase();
+                    if(!str.includes(q)) return false;
+                }
+                return true;
+            });
+
+            filtered.forEach(p => {
+                let img = p.Image ? p.Image : 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"%3E%3Crect fill="%23f1f5f9" width="100" height="100"/%3E%3Ctext fill="%2394a3b8" font-family="sans-serif" font-size="12" x="50" y="50" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
+                let matCount = p.Materials ? p.Materials.length : 0;
+                
+                list.innerHTML += `
+                    <div class="mobile-card flex items-center gap-4 !p-3 active:scale-[0.98] transition-transform cursor-pointer" onclick="selectProductWizard('${p['Product ID']}')">
+                        <img src="${img}" class="w-16 h-16 rounded-lg object-cover border border-gray-200" onclick="event.stopPropagation(); openGalleryFromProduct('${p['Product ID']}')">
+                        <div class="flex-1">
+                            <h4 class="font-bold text-gray-900 leading-tight mb-1">${p['Product Title']}</h4>
+                            <p class="text-xs text-gray-500 font-medium">${p.Company} • ${p['Universal Name']}</p>
+                            <p class="text-[10px] text-blue-600 font-bold mt-1 bg-blue-50 inline-block px-2 py-0.5 rounded">${matCount} Materials</p>
+                        </div>
+                        <i class="ph ph-caret-right text-gray-400 text-xl"></i>
+                    </div>
+                `;
+            });
+        }
+
+        function selectProductWizard(pid) {
+            wizardProduct = catalogProducts.find(x => x['Product ID'] === pid);
+            if(!wizardProduct) return;
+            
+            document.getElementById('mat-prod-img').src = wizardProduct.Image || '';
+            document.getElementById('mat-prod-title').innerText = wizardProduct['Product Title'];
+            document.getElementById('mat-prod-sub').innerText = wizardProduct.Company;
+            
+            const radList = document.getElementById('material-radio-list');
+            radList.innerHTML = '';
+            
+            let showPrice = (currentUser.Role === 'Admin' || currentUser['Show Rates'] === 'Yes');
+            
+            wizardProduct.Materials.forEach((m, idx) => {
+                let isChecked = m['Is Default'] === 'Yes' ? 'checked' : '';
+                let priceStr = showPrice ? `₹ ${parseFloat(m['Selling Price']||0).toFixed(2)}` : '';
+                
+                radList.innerHTML += `
+                    <input type="radio" name="wiz-mat" id="mat-${idx}" value="${idx}" ${isChecked}>
+                    <label for="mat-${idx}">
+                        <div class="flex items-center gap-3">
+                            <div class="radio-btn"></div>
+                            <span class="font-semibold text-gray-800 text-sm">${m.Material}</span>
+                        </div>
+                        <span class="font-bold text-blue-700 text-sm">${priceStr}</span>
+                    </label>
+                `;
+            });
+            navigate('material');
+        }
+
+        function goToQuantity() {
+            const sel = document.querySelector('input[name="wiz-mat"]:checked');
+            if(!sel) { showToast("Select a material first", "error"); return; }
+            wizardMaterial = wizardProduct.Materials[sel.value];
+            
+            document.getElementById('qty-prod-img').src = wizardProduct.Image || '';
+            document.getElementById('qty-prod-title').innerText = wizardProduct['Product Title'];
+            document.getElementById('qty-prod-mat').innerText = wizardMaterial.Material;
+            
+            let showPrice = (currentUser.Role === 'Admin' || currentUser['Show Rates'] === 'Yes');
+            let rate = parseFloat(wizardMaterial['Selling Price']) || 0;
+            document.getElementById('qty-prod-rate').innerText = showPrice ? `₹ ${rate.toFixed(2)}` : '';
+            document.getElementById('qty-input-val').value = 1;
+            
+            updateQtyTotal();
+            navigate('quantity');
+        }
+
+        function changeQty(delta) {
+            const inp = document.getElementById('qty-input-val');
+            let v = parseInt(inp.value) + delta;
+            if(v < 1) v = 1;
+            inp.value = v;
+            updateQtyTotal();
+        }
+
+        function updateQtyTotal() {
+            let qty = parseInt(document.getElementById('qty-input-val').value) || 1;
+            let showPrice = (currentUser.Role === 'Admin' || currentUser['Show Rates'] === 'Yes');
+            let rate = parseFloat(wizardMaterial['Selling Price']) || 0;
+            if(showPrice) {
+                document.getElementById('qty-line-total').innerText = `Total: ₹ ${(qty * rate).toFixed(2)}`;
+            } else {
+                document.getElementById('qty-line-total').innerText = '';
+            }
+        }
+
+        function addToCart() {
+            let qty = parseInt(document.getElementById('qty-input-val').value) || 1;
+            let existIdx = cart.findIndex(c => c.productId === wizardProduct['Product ID'] && c.material === wizardMaterial.Material);
+            if(existIdx >= 0) {
+                cart[existIdx].orderedQty += qty;
+            } else {
+                cart.push({
+                    productId: wizardProduct['Product ID'],
+                    productTitle: wizardProduct['Product Title'],
+                    company: wizardProduct.Company,
+                    universalName: wizardProduct['Universal Name'],
+                    material: wizardMaterial.Material,
+                    rate: parseFloat(wizardMaterial['Selling Price']||0),
+                    costPrice: parseFloat(wizardMaterial['Cost Price']||0),
+                    orderedQty: qty,
+                    image: wizardProduct.Image
+                });
+            }
+            showToast(`✅ ${wizardProduct['Product Title']} added to cart`);
+            navigate('catalog', true);
+            updateCartFloating();
+        }
+
+        function updateCartFloating() {
+            const count = cart.reduce((sum, item) => sum + item.orderedQty, 0);
+            const total = cart.reduce((sum, item) => sum + (item.rate * item.orderedQty), 0);
+            const elCount = document.getElementById('cart-floating-count');
+            const elTotal = document.getElementById('cart-floating-total');
+            if(elCount) elCount.innerText = count;
+            if(elTotal) elTotal.innerText = `₹ ${total.toFixed(2)}`;
+        }
+
+        function updateCartItemQty(idx, delta) {
+            cart[idx].orderedQty += delta;
+            if (cart[idx].orderedQty <= 0) {
+                removeCartItem(idx);
+            } else {
+                renderCart();
+            }
+        }
+
+        const origNavigate = navigate;
+        navigate = function(target, back) {
+            if(target === 'cart') renderCart();
+            origNavigate(target, back);
+        };
+
+        function renderCart() {
+            const list = document.getElementById('cart-items-container');
+            list.innerHTML = '';
+            let tQty = 0, tAmt = 0;
+            let showPrice = (currentUser.Role === 'Admin' || currentUser['Show Rates'] === 'Yes');
+            
+            cart.forEach((c, idx) => {
+                tQty += c.orderedQty;
+                tAmt += (c.rate * c.orderedQty);
+                let priceHtml = showPrice ? `<div class="font-bold text-blue-700 mt-1">₹ ${(c.rate * c.orderedQty).toFixed(2)}</div>` : '';
+                
+                list.innerHTML += `
+                    <div class="mobile-card !mb-0 flex gap-3 p-3 items-center">
+                        <img src="${c.image||''}" class="w-12 h-12 rounded object-cover border border-gray-200">
+                        <div class="flex-1">
+                            <h4 class="font-bold text-gray-900 text-sm leading-tight">${c.productTitle}</h4>
+                            <p class="text-[10px] text-gray-500 font-medium mb-2">${c.material}</p>
+                            <div class="flex items-center gap-3">
+                                <button class="w-7 h-7 rounded bg-gray-100 flex items-center justify-center text-gray-600 font-bold" onclick="updateCartItemQty(${idx}, -1)">-</button>
+                                <span class="text-sm font-bold w-6 text-center">${c.orderedQty}</span>
+                                <button class="w-7 h-7 rounded bg-gray-100 flex items-center justify-center text-gray-600 font-bold" onclick="updateCartItemQty(${idx}, 1)">+</button>
+                            </div>
+                        </div>
+                        <div class="text-right flex flex-col items-end justify-between h-full">
+                            <button class="text-red-500 text-xl p-1" onclick="removeCartItem(${idx})"><i class="ph ph-trash"></i></button>
+                            ${priceHtml}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('cart-item-count').innerText = cart.length;
+            document.getElementById('cart-summary-items').innerText = cart.length;
+            document.getElementById('cart-summary-qty').innerText = tQty;
+            document.getElementById('cart-summary-total').innerText = showPrice ? `₹ ${tAmt.toFixed(2)}` : 'Hidden';
+            updateCartFloating();
+        }
+
+        function removeCartItem(idx) { 
+            cart.splice(idx, 1); 
+            renderCart(); 
+        }
+
+        async function submitMobileOrder() {
+            if(cart.length === 0) { showToast("Cart is empty", "error"); return; }
+            let cid = currentUser.Role === 'Customer' ? currentUser['User ID'] : document.getElementById('catalog-cust-select').value;
+            
+            const btn = event.target;
+            const origText = btn.innerText;
+            btn.innerHTML = '<div class="loader w-5 h-5 border-2 border-white mx-auto"></div>';
+            
+            const payload = {
+                customerId: cid,
+                createdBy: currentUser.Username,
+                specialMessage: document.getElementById('cart-remarks').value,
+                items: cart
+            };
+            
+            const res = await api.submit_order(payload);
+            btn.innerText = origText;
+            if(res.success) {
+                cart = [];
+                document.getElementById('cart-remarks').value = '';
+                showToast("✅ Order Placed Successfully!", "success");
+                updateCartFloating();
+                navigate('orders');
+            } else {
+                showToast(res.error, "error");
+            }
+        }
+
+        // ==================== ORDERS LIST & DETAILS ====================
+        async function loadOrders() {
+            let uid = currentUser.Role === 'Customer' ? currentUser['User ID'] : ''; 
+            const res = await api.get_orders_history(currentUser.Role, uid);
+            if(res.success) {
+                myOrders = res.orders;
+                filterMobileOrders('All', document.querySelector('#order-status-tabs button'));
+            }
+        }
+
+        function filterMobileOrders(status, btnEl) {
+            if(btnEl) {
+                document.querySelectorAll('#order-status-tabs button').forEach(b => { b.classList.remove('bg-blue-700', 'text-white'); b.classList.add('bg-white', 'text-gray-600'); });
+                btnEl.classList.remove('bg-white', 'text-gray-600'); btnEl.classList.add('bg-blue-700', 'text-white');
+            }
+            
+            const list = document.getElementById('mobile-orders-list');
+            list.innerHTML = '';
+            
+            let filtered = myOrders;
+            if(status !== 'All') filtered = myOrders.filter(o => o.Status === status);
+            
+            let showPrice = (currentUser.Role !== 'Staff');
+            if(currentUser.Role === 'Customer' && currentUser['Show Rates'] !== 'Yes') showPrice = false;
+
+            filtered.forEach(o => {
+                let stClass = o.Status==='Completed' ? 'badge-completed' : (o.Status==='Partial'?'badge-partial':'badge-pending');
+                let priceHtml = showPrice ? `<div class="font-bold text-blue-700 text-lg">₹ ${parseFloat(o['Grand Total']||0).toFixed(2)}</div>` : '';
+                let custName = currentUser.Role !== 'Customer' ? `<p class="text-xs font-bold text-gray-700 mt-1"><i class="ph ph-user"></i> ${o['Customer Name']}</p>` : '';
+                
+                list.innerHTML += `
+                    <div class="mobile-card flex flex-col gap-3 active:scale-[0.99] transition-transform cursor-pointer" onclick="openOrderDetails('${o['Order ID']}')">
+                        <div class="flex justify-between items-start border-b border-gray-100 pb-2">
+                            <div>
+                                <h4 class="font-bold text-gray-900">${o['Order ID']}</h4>
+                                <p class="text-[11px] text-gray-500 font-medium">${o['Order Date']}</p>
+                                ${custName}
+                            </div>
+                            <span class="badge ${stClass}">${o.Status}</span>
+                        </div>
+                        <div class="flex justify-between items-end">
+                            <div class="text-sm text-gray-600">
+                                <div><i class="ph ph-package mr-1"></i> ${o['Total Quantity']} Pcs</div>
+                            </div>
+                            ${priceHtml}
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        async function openOrderDetails(oid) {
+            const res = await api.get_order_details(oid);
+            if(!res.success) return;
+            
+            orderDetailsCache = { header: res.header, items: res.items };
+            const h = res.header;
+            
+            document.getElementById('od-id').innerText = h['Order ID'];
+            document.getElementById('od-date').innerText = h['Order Date'];
+            let stClass = h.Status==='Completed' ? 'badge-completed' : (h.Status==='Partial'?'badge-partial':'badge-pending');
+            document.getElementById('od-status').className = `badge ${stClass}`;
+            document.getElementById('od-status').innerText = h.Status;
+            document.getElementById('od-items').innerText = h['Total Quantity'];
+            
+            if(currentUser.Role !== 'Customer') {
+                document.getElementById('od-customer-name').innerText = `Customer: ${h['Customer Name']}`;
+                document.getElementById('od-customer-name').classList.remove('hidden');
+            } else {
+                document.getElementById('od-customer-name').classList.add('hidden');
+            }
+
+            let showPrice = (currentUser.Role !== 'Staff');
+            if(currentUser.Role === 'Customer' && currentUser['Show Rates'] !== 'Yes') showPrice = false;
+            document.getElementById('od-amount').innerText = showPrice ? `₹ ${parseFloat(h['Grand Total']||0).toFixed(2)}` : '';
+
+            const list = document.getElementById('od-items-list');
+            list.innerHTML = '';
+            
+            const isProcessing = (currentUser.Role === 'Admin' || currentUser.Role === 'Staff');
+            if(isProcessing && h.Status !== 'Completed') document.getElementById('od-admin-actions').classList.remove('hidden');
+            else document.getElementById('od-admin-actions').classList.add('hidden');
+            
+            res.items.forEach((item, idx) => {
+                let isPrepared = item['Prepared By'] ? 'checked' : '';
+                let cbHtml = isProcessing ? `<label class="flex items-center gap-2 mt-2 text-sm font-semibold text-emerald-600"><input type="checkbox" class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-600 od-prep-cb" id="od-cb-${idx}" data-did="${item['Order Detail ID']}" ${isPrepared}> Prepared</label>` : (item['Prepared By'] ? '<p class="text-xs text-emerald-600 font-bold mt-1">✓ Prepared</p>' : '');
+                
+                let qtyHtml = isProcessing ? `
+                    <div class="flex items-center gap-2 mt-2">
+                        <span class="text-xs text-gray-500">Delivered:</span>
+                        <input type="number" class="border border-gray-300 rounded px-2 py-1 w-16 text-sm text-center font-bold od-del-qty" data-did="${item['Order Detail ID']}" value="${item['Delivered Qty']}" min="0">
+                        <span class="text-xs text-gray-500">/ ${item['Ordered Qty']}</span>
+                    </div>
+                ` : `<p class="text-sm font-bold text-gray-700 mt-1">Qty: ${item['Ordered Qty']}</p>`;
+
+                let prodMatch = prodData.find(p => String(p['Product ID']) === String(item['Product ID']));
+                let mfgPath = prodMatch ? (prodMatch['Manufacturing Folder Path'] || '') : '';
+                let mfgHtml = '';
+                if (isProcessing && mfgPath) {
+                    mfgHtml = `
+                    <div class="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between">
+                        <p class="text-[10px] text-gray-500 truncate mr-2">${mfgPath}</p>
+                        <div class="flex gap-2">
+                            <button class="text-blue-600 p-1" onclick="openCloudFile('${mfgPath.replace(/\\/g, '\\\\')}')"><i class="ph ph-folder-open text-lg"></i></button>
+                            <button class="text-gray-500 p-1" onclick="copyText('${mfgPath.replace(/\\/g, '\\\\')}')"><i class="ph ph-copy text-lg"></i></button>
+                        </div>
+                    </div>`;
+                }
+
+                list.innerHTML += `
+                    <div class="mobile-card flex flex-col !p-3">
+                        <div class="flex gap-3">
+                            <div class="w-16 h-16 rounded-full bg-gray-100 flex-shrink-0 border border-gray-200 overflow-hidden cursor-pointer" onclick="openGalleryFromProduct('${item['Product ID']}')">
+                                <i class="ph ph-image text-gray-400 text-2xl flex items-center justify-center w-full h-full"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="font-bold text-gray-900 text-sm leading-tight">${item['Product Title']}</h4>
+                                <p class="text-[11px] text-gray-500 font-medium">${item['Material']||'Clear'} • ${item['Universal Name']}</p>
+                                ${qtyHtml}
+                                ${cbHtml}
+                            </div>
+                        </div>
+                        ${mfgHtml}
+                    </div>
+                `;
+            });
+            navigate('order-details');
+        }
+
+        async function saveStaffOrderUpdates() {
+            if(!orderDetailsCache) return;
+            const payload = { orderId: orderDetailsCache.header['Order ID'], staffName: currentUser['User Name'], staffId: currentUser['User ID'], items: [] };
+            
+            document.querySelectorAll('.od-del-qty').forEach((inp, idx) => {
+                const cb = document.getElementById(`od-cb-${idx}`);
+                payload.items.push({ detailId: inp.getAttribute('data-did'), deliveredQty: parseInt(inp.value) || 0, isPrepared: cb ? cb.checked : false });
+            });
+
+            const btn = event.target;
+            btn.innerHTML = '<div class="loader w-5 h-5 mx-auto"></div>';
+            const res = await api.process_order(payload);
+            
+            if(res.success) { showToast("✅ Order Updated"); navigate('orders'); } else { showToast(res.error, "error"); btn.innerText = "SAVE PACKING UPDATES"; }
+        }
+
+        // ==================== RATES ====================
+        async function loadRates() {
+            let uid = currentUser['User ID'];
+            const list = document.getElementById('mobile-rates-list');
+            list.innerHTML = '<div class="loader mx-auto mt-4 border-blue-700"></div>';
+
+            const res = await api.get_customer_rates(uid, currentUser.Role, uid);
+            
+            const catalogRes = await api.get_order_entry_data(uid);
+            let allowedUniversals = new Set();
+            if(catalogRes.success) {
+                catalogRes.products.forEach(p => allowedUniversals.add(String(p['Universal Name']).toLowerCase()));
+            }
+
+            if(res.success && res.rates.length > 0) {
+                let grouped = {};
+                res.rates.forEach(r => {
+                    if(r.Rate !== "" && allowedUniversals.has(String(r['Universal Name']).toLowerCase())) {
+                        if(!grouped[r['Universal Name']]) grouped[r['Universal Name']] = [];
+                        grouped[r['Universal Name']].push(r);
+                    }
+                });
+                
+                list.innerHTML = '';
+                if(Object.keys(grouped).length > 0) {
+                    for(let uName in grouped) {
+                        let rows = '';
+                        grouped[uName].forEach(r => {
+                            let price = parseFloat(r.Rate);
+                            rows += `<div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0"><span class="text-sm font-medium text-gray-700">${r.Material}</span><span class="font-bold text-blue-700">₹ ${price.toFixed(2)}</span></div>`;
+                        });
+                        
+                        list.innerHTML += `
+                            <div class="mobile-card !p-0 overflow-hidden">
+                                <div class="bg-gray-50 px-4 py-2 border-b border-gray-200"><h4 class="font-bold text-gray-800 text-sm">${uName}</h4></div>
+                                <div class="px-4 py-1">${rows}</div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    list.innerHTML = '<p class="text-center text-gray-500 py-4">No special rates mapped for your active categories.</p>';
+                }
+            } else {
+                list.innerHTML = '<p class="text-center text-gray-500 py-4">No special rates mapped.</p>';
+            }
+        }
+
+        function filterMobileRates() {
+            let q = document.getElementById('rates-search').value.toLowerCase();
+            document.querySelectorAll('#mobile-rates-list .mobile-card').forEach(c => {
+                c.style.display = c.innerText.toLowerCase().includes(q) ? '' : 'none';
+            });
+        }
+
+        // ==================== STATEMENT ====================
+        async function loadStatement() {
+            const res = await api.get_customer_statement(currentUser['User ID']);
+            if(!res.success) return;
+            
+            document.getElementById('stmt-bal-val').innerText = `₹ ${parseFloat(res.customer.Balance||0).toFixed(2)}`;
+            document.getElementById('stmt-sales-val').innerText = `₹ ${parseFloat(res.customer['Total Sales']||0).toFixed(2)}`;
+            document.getElementById('stmt-paid-val').innerText = `₹ ${parseFloat(res.customer['Total Payments']||0).toFixed(2)}`;
+            
+            const list = document.getElementById('mobile-stmt-list');
+            list.innerHTML = '';
+            res.ledger.slice().reverse().forEach(l => {
+                let isCredit = parseFloat(l.Credit||0) > 0;
+                let amt = isCredit ? parseFloat(l.Credit||0) : parseFloat(l.Debit||0);
+                let icon = isCredit ? '<i class="ph ph-arrow-down-left text-emerald-500 bg-emerald-50 p-2 rounded-full"></i>' : '<i class="ph ph-arrow-up-right text-red-500 bg-red-50 p-2 rounded-full"></i>';
+                let amtClass = isCredit ? 'text-emerald-600' : 'text-gray-900';
+                
+                list.innerHTML += `
+                    <div class="mobile-card flex items-center gap-3 !p-3">
+                        ${icon}
+                        <div class="flex-1">
+                            <h4 class="font-bold text-gray-800 text-sm">${l.Remarks || l['Reference ID']}</h4>
+                            <p class="text-[10px] text-gray-500">${l.Date}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold ${amtClass} text-sm">₹ ${amt.toFixed(2)}</p>
+                            <p class="text-[10px] text-gray-500 font-medium">Bal: ₹ ${parseFloat(l.Balance||0).toFixed(2)}</p>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // ==================== IMAGE GALLERY (MOBILE) ====================
+        let gImgs = [];
+        let gIdx = 0;
+        let touchStartX = 0;
+
+        async function openGalleryFromProduct(pid) {
+            const res = await api.get_product_images(pid);
+            if(res.success && res.images && res.images.length > 0) {
+                gImgs = res.images;
+                gIdx = 0; 
+                let defIdx = gImgs.findIndex(i => i.filename.includes('⭐'));
+                if(defIdx >= 0) gIdx = defIdx;
+                
+                document.getElementById('gallery-modal').classList.add('active');
+                renderGalleryMobile();
+            } else {
+                showToast("No images available for this product.", "info");
+            }
+        }
+        
+        function renderGalleryMobile() {
+            if(!gImgs || gImgs.length === 0) return;
+            document.getElementById('gallery-main-img').src = gImgs[gIdx].data;
+            document.getElementById('gallery-counter').innerText = `${gIdx + 1} / ${gImgs.length}`;
+            
+            const strip = document.getElementById('gallery-thumb-strip');
+            strip.innerHTML = '';
+            if(gImgs.length > 1) {
+                gImgs.forEach((img, i) => {
+                    strip.innerHTML += `<img src="${img.data}" class="gallery-thumb ${i===gIdx?'active':''}" onclick="gIdx=${i}; renderGalleryMobile()">`;
+                });
+            }
+        }
+        
+        function navGallery(dir) {
+            if(gImgs.length <= 1) return;
+            gIdx = (gIdx + dir + gImgs.length) % gImgs.length;
+            renderGalleryMobile();
+        }
+        
+        function closeGallery() { document.getElementById('gallery-modal').classList.remove('active'); }
+        
+        function initGalleryTouch() {
+            const area = document.getElementById('gallery-touch-area');
+            area.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; });
+            area.addEventListener('touchend', e => {
+                let touchEndX = e.changedTouches[0].screenX;
+                if(touchEndX < touchStartX - 50) navGallery(1);
+                if(touchEndX > touchStartX + 50) navGallery(-1);
+            });
+        }
+
+        // ==================== GENERIC LIST VIEWS & REPORTS (Admin) ====================
+        async function loadGenericList(target) {
+            currentListType = target;
+            const list = document.getElementById('generic-list-container');
+            list.innerHTML = '<div class="loader mx-auto mt-10 border-blue-700"></div>';
+            
+            if(target === 'list-customers') {
+                const res = await api.get_users();
+                genericListData = res.filter(u => u.Role === 'Customer');
+            } else if (target === 'list-users') {
+                genericListData = await api.get_users();
+            } else if (target === 'list-verticals') {
+                genericListData = await api.get_verticals();
+            } else if (target === 'list-universals') {
+                genericListData = await api.get_universals();
+            } else if (target === 'list-products') {
+                genericListData = await api.get_products();
+            } else if (target === 'list-ledger') {
+                const res = await api.get_accounts_summary();
+                genericListData = res.accounts || [];
+            } else if (target === 'list-payments') {
+                const res = await api.get_payments();
+                genericListData = res.payments || [];
+            } else if (target === 'list-rates') {
+                genericListData = await api.get_active_customers();
+            }
+            renderGenericList(getTemplateForCurrentList());
+        }
+        
+        function renderGenericList(templateFn) {
+            const list = document.getElementById('generic-list-container');
+            list.innerHTML = '';
+            let q = document.getElementById('generic-search').value.toLowerCase();
+            let filtered = genericListData.filter(item => JSON.stringify(item).toLowerCase().includes(q));
+            
+            filtered.forEach(item => { list.innerHTML += templateFn(item); });
+            if(filtered.length === 0) list.innerHTML = '<p class="text-center text-gray-500 py-4">No records found.</p>';
+        }
+        
+        function filterGenericList() { renderGenericList(getTemplateForCurrentList()); }
+        
+        function getTemplateForCurrentList() {
+            if(currentListType === 'list-customers' || currentListType === 'list-users') return u => `<div class="mobile-card flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">${String(u['User Name']).charAt(0)}</div><div class="flex-1"><h4 class="font-bold text-gray-900">${u['User Name']}</h4><p class="text-xs text-gray-500"><i class="ph ph-phone"></i> ${u['Mobile Number']} | ${u.Role}</p></div><span class="badge ${u.Status==='Active'?'badge-completed':'badge-pending'}">${u.Status}</span></div>`;
+            if(currentListType === 'list-products') return p => `<div class="mobile-card flex items-center gap-3"><div class="w-12 h-12 rounded bg-gray-100 flex items-center justify-center border border-gray-200 overflow-hidden cursor-pointer" onclick="openGalleryFromProduct('${p['Product ID']}')"><i class="ph ph-image text-gray-400"></i></div><div class="flex-1"><h4 class="font-bold text-gray-900 text-sm leading-tight">${p['Product Title']}</h4><p class="text-xs text-gray-500">${p['Company']} • ${p['Universal Name']}</p></div></div>`;
+            if(currentListType === 'list-ledger') return a => `<div class="mobile-card flex justify-between items-center"><div><h4 class="font-bold text-gray-900">${a['Customer Name']}</h4><p class="text-[10px] text-gray-500">Sales: ₹${parseFloat(a['Total Sales']||0).toFixed(2)} | Paid: ₹${parseFloat(a['Total Payments']||0).toFixed(2)}</p></div><div class="text-right"><p class="text-xs text-gray-500 font-semibold mb-1">Balance</p><h4 class="font-bold text-blue-700">₹ ${parseFloat(a.Balance||0).toFixed(2)}</h4></div></div>`;
+            if(currentListType === 'list-verticals') return v => `<div class="mobile-card flex justify-between items-center"><h4 class="font-bold text-gray-900">${v['Vertical Name']}</h4><span class="badge ${v.Status==='Active'?'badge-completed':'badge-pending'}">${v.Status}</span></div>`;
+            if(currentListType === 'list-universals') return u => `<div class="mobile-card flex justify-between items-center"><div><h4 class="font-bold text-gray-900">${u['Universal Name']}</h4><p class="text-xs text-gray-500">${u['Vertical']}</p></div><span class="badge ${u.Status==='Active'?'badge-completed':'badge-pending'}">${u.Status}</span></div>`;
+            if(currentListType === 'list-payments') return p => `<div class="mobile-card flex justify-between items-center"><div><h4 class="font-bold text-gray-900">${p['Customer Name']}</h4><p class="text-[10px] text-gray-500">${p['Date']} • ${p['Payment Mode']}</p></div><h4 class="font-bold text-emerald-600">₹ ${parseFloat(p.Amount||0).toFixed(2)}</h4></div>`;
+            if(currentListType === 'list-rates') return c => `<div class="mobile-card flex justify-between items-center"><div><h4 class="font-bold text-gray-900">${c['User Name']}</h4><p class="text-xs text-gray-500">${c['User ID']}</p></div><span class="text-xs text-blue-600 font-semibold">Mapped Rates</span></div>`;
+            return () => '';
+        }
+
+        async function generateMobileReport() {
+            const type = document.getElementById('report-type').value;
+            const list = document.getElementById('mobile-report-list');
+            list.innerHTML = '<div class="loader mx-auto mt-4 border-blue-700"></div>';
+            if (type === 'sales') {
+                const res = await api.get_orders_history('Admin', '');
+                list.innerHTML = '';
+                if(res.orders.length===0) list.innerHTML = '<p class="text-center text-gray-500">No sales data.</p>';
+                res.orders.forEach(o => { list.innerHTML += `<div class="mobile-card !mb-2 flex justify-between"><div><p class="text-xs font-bold">${o['Order ID']}</p><p class="text-[10px] text-gray-500">${o['Customer Name']}</p></div><div class="font-bold text-blue-700">₹ ${parseFloat(o['Grand Total']||0).toFixed(2)}</div></div>`; });
+            } else {
+                const res = await api.get_payments();
+                list.innerHTML = '';
+                if(res.payments.length===0) list.innerHTML = '<p class="text-center text-gray-500">No payment data.</p>';
+                res.payments.forEach(p => { list.innerHTML += `<div class="mobile-card !mb-2 flex justify-between"><div><p class="text-xs font-bold">${p['Payment Mode']}</p><p class="text-[10px] text-gray-500">${p['Customer Name']}</p></div><div class="font-bold text-emerald-600">₹ ${parseFloat(p.Amount||0).toFixed(2)}</div></div>`; });
+            }
+        }
+
+        function triggerGenericAdd() {
+            showToast("Data integrity restriction: Please use the Desktop application to create or edit Master Records.", "info");
+        }
+
+        function togglePassword() { 
+            let x = document.getElementById("login-pass"); 
+            if (x.type === "password") { x.type = "text"; } else { x.type = "password"; } 
+        }
+
+        // ==================== PROFIT CENTER ====================
+        async function unlockProfitCenter() {
+            const pwd = document.getElementById('profit-auth-pwd').value;
+            if(!pwd) { showToast("Please enter password", "error"); return; }
+            
+            const btn = event.target;
+            const origText = btn.innerText;
+            btn.innerHTML = '<div class="loader w-5 h-5 mx-auto border-2 border-white"></div>';
+            
+            const res = await api.verify_profit_password(pwd);
+            btn.innerText = origText;
+            
+            if(res.success) {
+                document.getElementById('profit-auth-panel').classList.add('hidden');
+                document.getElementById('profit-main-panel').classList.remove('hidden');
+                loadProfitData();
+            } else {
+                showToast("❌ Incorrect Profit Password!", "error");
+            }
+        }
+
+        async function loadProfitData() {
+            document.getElementById('profit-list').innerHTML = '<div class="loader mx-auto mt-4 border-blue-700"></div>';
+            const res = await api.get_profit_data();
+            if(res.success) {
+                rawProfitData = res.data;
+                renderProfitCards();
+            }
+        }
+
+        function renderProfitCards() {
+            const groupBy = document.getElementById('prof-group-by').value;
+            const list = document.getElementById('profit-list');
+            list.innerHTML = '';
+            
+            if(!rawProfitData || rawProfitData.length === 0) {
+                list.innerHTML = '<p class="text-center text-gray-500 py-4">No profit data found.</p>';
+                return;
+            }
+
+            let totalSales = 0, totalCost = 0, totalProfit = 0;
+            let groups = {};
+
+            rawProfitData.forEach(d => {
+                let s = parseFloat(d.Sales||0), c = parseFloat(d.Cost||0), p = parseFloat(d.Profit||0);
+                totalSales += s; totalCost += c; totalProfit += p;
+                
+                let gKey = d[groupBy] || 'Unknown';
+                if(!groups[gKey]) groups[gKey] = { Sales: 0, Cost: 0, Profit: 0 };
+                groups[gKey].Sales += s; groups[gKey].Cost += c; groups[gKey].Profit += p;
+            });
+
+            document.getElementById('prof-sales').innerText = `₹ ${totalSales.toFixed(2)}`;
+            document.getElementById('prof-cost').innerText = `₹ ${totalCost.toFixed(2)}`;
+            document.getElementById('prof-profit').innerText = `₹ ${totalProfit.toFixed(2)}`;
+            let margin = totalSales > 0 ? (totalProfit / totalSales) * 100 : 0;
+            document.getElementById('prof-margin').innerText = `${margin.toFixed(1)}%`;
+
+            for(let key in groups) {
+                let g = groups[key];
+                let gMargin = g.Sales > 0 ? (g.Profit / g.Sales) * 100 : 0;
+                list.innerHTML += `
+                    <div class="mobile-card flex justify-between items-center !p-3 mb-2">
+                        <div class="w-1/2">
+                            <h4 class="font-bold text-gray-800 text-sm truncate">${key}</h4>
+                            <p class="text-[10px] text-gray-500">Sales: ₹${g.Sales.toFixed(2)}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-blue-700 text-sm">₹${g.Profit.toFixed(2)}</p>
+                            <p class="text-[10px] text-purple-600 font-semibold">${gMargin.toFixed(1)}% Margin</p>
+                        </div>
+                    </div>`;
+            }
+        }
+
+        // ==========================================
+        // NEW CLOUD FEATURES (IMAGE & FILE HANDLING)
+        // ==========================================
+        
+        // 1. Cloud Image Uploader
+        async function uploadCloudImage(productId) {
+            const fileInput = document.getElementById('product-image-input');
+            const file = fileInput ? fileInput.files[0] : null;
+            
+            if (!file) {
+                showToast("Please select an image first!", "error");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const base64Data = e.target.result;
+                showToast("Uploading image to Cloud...");
+                
+                const res = await api.upload_product_image(productId, file.name, base64Data);
+                
+                if (res.success) {
+                    showToast("✅ Image Uploaded Successfully!", "success");
+                } else {
+                    showToast("❌ Error: " + res.error, "error");
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // 2. Cloud File Opener (For Manufacturing Files)
+        async function openCloudFile(filePath) {
+            if (!filePath || filePath === 'N/A') {
+                showToast("No file path attached!", "error");
+                return;
+            }
+            
+            const res = await api.open_manufacturing_file(filePath);
+            if (res.success) {
+                showToast("Opening file in browser...");
+                window.open(res.url || res.path, '_blank'); 
+            } else {
+                showToast("Error: " + res.error, "error");
+            }
+        }
+
+        // 3. Settings operations
+        async function updateProfitPassword() { 
+            const newPwd = document.getElementById('setting-profit-pwd').value; 
+            if(!newPwd) return; 
+            const res = await api.save_profit_password(newPwd); 
+            if(res.success) { 
+                showToast("✅ Profit Password successfully updated.", "success"); 
+                document.getElementById('setting-profit-pwd').value = ''; 
+            } 
+        }
+
+        async function createBackup() { 
+            showToast("Generating secure cloud backup...");
+            const res = await api.backup_data(); 
+            if(res.success) showToast(`✅ Backup created successfully at:\n${res.path}`, "success"); 
+            else showToast(`❌ Backup Failed: ${res.error}`, "error"); 
+        }
+
+    </script>
+</body>
+</html>
