@@ -5,7 +5,7 @@ from supabase import create_client, Client
 # ==========================================
 # STEP 1: SUPABASE CONNECTION SETUP
 # ==========================================
-# Dummy HTTPS URL takki server crash na ho (Asli kaam ke liye real URL dalna zaroori hai)
+# Original Keys Restored
 SUPABASE_URL = "https://eznlneklxmrtpnbryzwl.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6bmxuZWtseG1ydHBuYnJ5endsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTUzNTY1NywiZXhwIjoyMTAxMTExNjU3fQ.8omKupTDpgdfgb9alMzLaP3Gsd1Hez4DRB2CIBzeLM0"
 
@@ -108,21 +108,30 @@ def init_db():
 # ==========================================
 def read_table(table_name):
     """
-    Reads table from Supabase and Auto-migrates missing columns exactly like old code.
+    Reads table from Supabase, Auto-migrates missing columns, 
+    AND REMOVES DUPLICATE DATA (Smart Filter).
     """
     try:
         response = supabase.table(table_name).select("*").execute()
         data = response.data if response.data else []
         
-        # STRICT MATCH: Auto-migrates missing columns dynamically
         required_headers = SCHEMAS.get(table_name, [])
         formatted_data = []
+        seen_rows = set() # Duplicate check ke liye memory
         
         for row_dict in data:
+            # 1. Missing columns ko blank string ("") se fill karna (tumhara purana logic)
             for req in required_headers:
                 if req not in row_dict or row_dict[req] is None:
                     row_dict[req] = ""
-            formatted_data.append(row_dict)
+            
+            # 2. Smart Duplicate Filter: 'id' column ko chhod kar baaki pure data ka fingerprint banate hain
+            # Kyunki migration 2 baar run hone par data same hota hai, bas naya Supabase ID mil jata hai
+            fingerprint = tuple(str(row_dict.get(key, '')).strip().lower() for key in required_headers)
+            
+            if fingerprint not in seen_rows:
+                seen_rows.add(fingerprint)
+                formatted_data.append(row_dict)
             
         return formatted_data
     except Exception as e:
@@ -134,7 +143,6 @@ def write_table(table_name, data):
     Cloud Equivalent of Overwrite. Uses Upsert. 
     Guarantees Schema enforcement and Safety Guards.
     """
-    # CRITICAL FIX: Safety guards exactly as requested
     if data is None:
         raise ValueError("write_table() received None")
 
@@ -143,9 +151,6 @@ def write_table(table_name, data):
         return False
         
     try:
-        # Excel mein poori file overwrite hoti thi.
-        # Supabase mein '.upsert()' ek list of dicts ko leta hai.
-        # Jo naye honge wo Insert honge, jo purane honge (ID match) wo Update honge.
         response = supabase.table(table_name).upsert(data).execute()
         return True
     except Exception as e:
@@ -162,7 +167,8 @@ def rebuild_customer_ledger(customer_id):
         # Fetch all data, filter by customer ID
         all_data = read_table('LedgerMaster')
         
-        cust_ledger = [d for d in all_data if str(d.get('Customer ID')) == str(customer_id)]
+        # FIX: Added .strip().lower() to fix space issues in IDs
+        cust_ledger = [d for d in all_data if str(d.get('Customer ID')).strip().lower() == str(customer_id).strip().lower()]
         
         if not cust_ledger:
             return
