@@ -150,12 +150,25 @@ def write_table(table_name, data):
         print(f"WARNING: Refusing to overwrite {table_name} with empty data.")
         return False
         
+    # CLOUD FIX: PostgreSQL Strict Typing Error Prevention
+    # Convert empty strings ("") back to None (NULL) so numeric columns don't crash Supabase.
+    clean_data = []
+    for row in data:
+        clean_row = {}
+        for k, v in row.items():
+            if v == "":
+                clean_row[k] = None
+            else:
+                clean_row[k] = v
+        clean_data.append(clean_row)
+        
     try:
-        response = supabase.table(table_name).upsert(data).execute()
+        response = supabase.table(table_name).upsert(clean_data).execute()
         return True
     except Exception as e:
         print(f"Error writing {table_name}: {str(e)}")
         return False
+
 
 # ==========================================
 # STRICT MATCH: LEDGER REBUILD
