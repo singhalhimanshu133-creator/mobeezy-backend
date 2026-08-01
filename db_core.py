@@ -126,7 +126,6 @@ def read_table(table_name):
                     row_dict[req] = ""
             
             # 2. Smart Duplicate Filter: 'id' column ko chhod kar baaki pure data ka fingerprint banate hain
-            # Kyunki migration 2 baar run hone par data same hota hai, bas naya Supabase ID mil jata hai
             fingerprint = tuple(str(row_dict.get(key, '')).strip().lower() for key in required_headers)
             
             if fingerprint not in seen_rows:
@@ -150,13 +149,13 @@ def write_table(table_name, data):
         print(f"WARNING: Refusing to overwrite {table_name} with empty data.")
         return False
         
-    # CLOUD FIX: PostgreSQL Strict Typing Error Prevention
-    # Convert empty strings ("") back to None (NULL) so numeric columns don't crash Supabase.
+    # CLOUD FIX: SUPER STRICT Typing Error Prevention
+    # Convert empty strings ("") AND strings with just spaces (" ") back to None (NULL)
     clean_data = []
     for row in data:
         clean_row = {}
         for k, v in row.items():
-            if v == "":
+            if v is None or (isinstance(v, str) and str(v).strip() == ""):
                 clean_row[k] = None
             else:
                 clean_row[k] = v
@@ -174,9 +173,15 @@ def write_table(table_name, data):
 # STRICT MATCH: LEDGER REBUILD
 # ==========================================
 def rebuild_customer_ledger(customer_id):
-    """Exact logic match for running balance recalculation."""
+    """Exact logic match for running balance recalculation with strict cloud guards."""
     try:
-        # Fetch all data, filter by customer ID
+        def _safe_float(val):
+            try:
+                if val in [None, "", " ", "N/A", "null"]: return 0.0
+                return float(val)
+            except:
+                return 0.0
+
         all_data = read_table('LedgerMaster')
         
         # FIX: Added .strip().lower() to fix space issues in IDs
@@ -192,17 +197,20 @@ def rebuild_customer_ledger(customer_id):
         updated_ledgers = []
         
         for l in cust_ledger:
-            d_val = float(l.get('Debit') or 0.0)
-            c_val = float(l.get('Credit') or 0.0)
+            d_val = _safe_float(l.get('Debit'))
+            c_val = _safe_float(l.get('Credit'))
+            
             running_balance += (d_val - c_val)
             
             # Dictionary mein naya balance daal do
             l['Balance'] = running_balance
             updated_ledgers.append(l)
             
-        # Supabase mein updated balances upsert kar do
+        # BUG FIX: Pehle yeh direct supabase.upsert() call kar raha tha, jisse 
+        # humara "clean_data" wala filter bypass ho raha tha. Ab yeh write_table 
+        # use karega taaki saara data theek se saaf ho kar database mein jaye!
         if updated_ledgers:
-            supabase.table('LedgerMaster').upsert(updated_ledgers).execute()
+            write_table('LedgerMaster', updated_ledgers)
             
     except Exception as e:
         print(f"Error rebuilding ledger: {e}")
