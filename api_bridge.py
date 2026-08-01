@@ -106,8 +106,6 @@ class APIBridge:
         if 'ProductRateMapping' in db_core.SCHEMAS and 'Material' not in db_core.SCHEMAS['ProductRateMapping']:
             db_core.SCHEMAS['ProductRateMapping'] = ['Customer ID', 'Universal Name', 'Material', 'Rate']
 
-    # --- BUG FIX 1: SMART ID GENERATOR ---
-    # Yeh duplicate IDs aur Overwrite conflict banne se rokega
     def _generate_new_id(self, items, id_key, prefix, padding):
         max_num = 0
         for item in items:
@@ -158,7 +156,7 @@ class APIBridge:
                     if str(user.get('Status')).strip().title() != 'Active': 
                         return {"success": False, "error": "Account is inactive."}
                     user['Last Login'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    db_core.write_table('UserMaster', [user]) # Upsert single user
+                    db_core.write_table('UserMaster', [user]) 
                     safe_user = dict(user)
                     safe_user['Password'] = "" 
                     return self._sanitize_data({"success": True, "user": safe_user})
@@ -272,7 +270,7 @@ class APIBridge:
             return self._sanitize_data(univs)
         except: return []
 
-    # --- SAVE OPERATIONS ---
+    # --- SAVE OPERATIONS (Fixed the array-overwrite logic) ---
     def save_user(self, data=None):
         try:
             if data is None: return {"success": False, "error": "No payload"}
@@ -285,15 +283,14 @@ class APIBridge:
             
             if not uid:
                 data['User ID'] = self._generate_new_id(users, 'User ID', 'U', 3)
-                users.append(data)
             else:
-                for i, u in enumerate(users):
+                for u in users:
                     if str(u.get('User ID')) == str(uid):
                         if not data.get('Password'): data['Password'] = u.get('Password')
-                        users[i] = data
                         break
                         
-            if not db_core.write_table('UserMaster', users): return {"success": False, "error": "Database write failed."}
+            # Sirf ek row write karenge
+            if not db_core.write_table('UserMaster', [data]): return {"success": False, "error": "Database write failed."}
             return {"success": True}
         except Exception as e: return {"success": False, "error": str(e)}
 
@@ -304,14 +301,8 @@ class APIBridge:
             vid = data.get('Vertical ID')
             if not vid:
                 data['Vertical ID'] = self._generate_new_id(verts, 'Vertical ID', 'V', 3)
-                verts.append(data)
-            else:
-                for i, v in enumerate(verts):
-                    if str(v.get('Vertical ID')) == str(vid):
-                        verts[i] = data
-                        break
                         
-            if not db_core.write_table('VerticalMaster', verts): return {"success": False, "error": "Database write failed."}
+            if not db_core.write_table('VerticalMaster', [data]): return {"success": False, "error": "Database write failed."}
             return {"success": True}
         except Exception as e: return {"success": False, "error": str(e)}
 
@@ -319,36 +310,28 @@ class APIBridge:
         try:
             if data is None: return {"success": False, "error": "No payload"}
             univs = db_core.read_table('UniversalMaster')
-            all_materials = db_core.read_table('UniversalMaterials')
             
             orig = data.pop('_OriginalName', None)
             new_materials = data.pop('Materials', [])
-            
-            if not orig or str(orig).strip() != str(data.get('Universal Name')).strip():
-                if any(str(u.get('Universal Name')).lower() == str(data.get('Universal Name')).lower() for u in univs): 
-                    return {"success": False, "error": "Universal exists."}
-                
-            if not orig: 
-                univs.append(data)
-            else:
-                for i, u in enumerate(univs):
-                    if str(u.get('Universal Name')) == str(orig):
-                        univs[i] = data; break
-            
             uname = data.get('Universal Name')
             
-            # Universal Name change hua toh purane materials ko pehle cloud se uda do
-            if orig and str(orig).strip() != str(uname).strip():
+            if not orig or str(orig).strip() != str(uname).strip():
+                if any(str(u.get('Universal Name')).lower() == str(uname).lower() for u in univs): 
+                    return {"success": False, "error": "Universal Name already exists."}
+            
+            # WIPE SLATE CLEAN: Purane materials hamesha delete karo taaki "Ghost Materials" na bache
+            if orig:
                 db_core.delete_records('UniversalMaterials', {'Universal Name': orig})
+            if uname and str(uname) != str(orig):
+                db_core.delete_records('UniversalMaterials', {'Universal Name': uname})
 
-            # Sirf naye universal ke bache hue materials rakh kar add karo
-            all_materials = [m for m in all_materials if str(m.get('Universal Name')) != str(orig)]
             for nm in new_materials:
                 nm['Universal Name'] = uname
-                all_materials.append(nm)
                 
-            s1 = db_core.write_table('UniversalMaster', [data]) # Upsert
-            s2 = db_core.write_table('UniversalMaterials', new_materials) # Naye Upsert
+            s1 = db_core.write_table('UniversalMaster', [data]) 
+            s2 = True
+            if new_materials:
+                s2 = db_core.write_table('UniversalMaterials', new_materials) 
             
             if not s1 or not s2: return {"success": False, "error": "Database write failed."}
             return {"success": True}
@@ -361,14 +344,13 @@ class APIBridge:
             pid = data.get('Product ID')
             if not pid:
                 data['Product ID'] = self._generate_new_id(products, 'Product ID', 'P', 4)
-                products.append(data)
             else:
-                for i, p in enumerate(products):
+                for p in products:
                     if str(p.get('Product ID')) == str(pid):
                         if 'Image Folder' not in data: data['Image Folder'] = p.get('Image Folder', '')
-                        products[i] = data; break
+                        break
                         
-            if not db_core.write_table('ProductMaster', products): return {"success": False, "error": "Database write failed."}
+            if not db_core.write_table('ProductMaster', [data]): return {"success": False, "error": "Database write failed."}
             return {"success": True, "productId": data['Product ID']}
         except Exception as e: return {"success": False, "error": str(e)}
 
@@ -389,7 +371,6 @@ class APIBridge:
             return {"success": True}
         except Exception as e: return {"success": False, "error": str(e)}
 
-    # --- BUG FIX 2: REAL CLOUD DELETIONS ---
     def delete_user(self, user_id=""):
         try:
             if db_core.delete_records('UserMaster', {'User ID': user_id}): return {"success": True}
@@ -516,7 +497,6 @@ class APIBridge:
         try:
             if payload is None: return {"success": False, "error": "No payload"}
             headers = db_core.read_table('OrderHeader')
-            details = db_core.read_table('OrderDetails')
             users = db_core.read_table('UserMaster')
 
             new_order_id = self._generate_new_id(headers, 'Order ID', 'ORD-', 5)
@@ -703,7 +683,6 @@ class APIBridge:
             return {"success": True}
         except Exception as e: return {"success": False, "error": str(e)}
 
-    # REAL DATABASE DELETE CALLED HERE
     def delete_order(self, order_id=""):
         try:
             h = next((h for h in db_core.read_table('OrderHeader') if str(h.get('Order ID')) == str(order_id)), None)
@@ -786,36 +765,33 @@ class APIBridge:
             rates = db_core.read_table('ProductRateMapping')
             if rates is None: rates = []
 
-            found = False
             uni_name_lower = str(uni_name).strip().lower()
             mat_name_lower = str(material).strip().lower()
             
-            r_data = None
+            # CASE-MISMATCH GHOST BUG FIXED: Find exact match from DB and delete it first
             for r in rates:
                 r_uni = str(r.get('Universal Name', '')).strip().lower()
                 r_mat = str(r.get('Material', '')).strip().lower()
                 if not r_mat: r_mat = 'clear'
                 
                 if str(r.get('Customer ID')).strip() == str(cust_id).strip() and r_uni == uni_name_lower and r_mat == mat_name_lower:
-                    r['Rate'] = rate
-                    r['Material'] = material
-                    r_data = r
-                    found = True
+                    # Deleting EXACT DB case to prevent duplicate mapping rows
+                    db_core.delete_records('ProductRateMapping', {
+                        'Customer ID': r.get('Customer ID'),
+                        'Universal Name': r.get('Universal Name'),
+                        'Material': r.get('Material')
+                    })
                     break
                     
-            if not found: 
+            if str(rate).strip() != "":
                 r_data = {
                     'Customer ID': cust_id, 
                     'Universal Name': uni_name, 
                     'Material': material, 
                     'Rate': rate
                 }
-                
-            if r_data and str(rate).strip() == "":
-                # Delete mapping if rate is emptied
-                db_core.delete_records('ProductRateMapping', {'Customer ID': cust_id, 'Universal Name': uni_name, 'Material': material})
-            elif r_data:
-                if not db_core.write_table('ProductRateMapping', [r_data]): return {"success": False, "error": "Database write failed."}
+                if not db_core.write_table('ProductRateMapping', [r_data]): 
+                    return {"success": False, "error": "Database write failed."}
                 
             return {"success": True}
         except Exception as e: return {"success": False, "error": str(e)}
@@ -923,7 +899,6 @@ class APIBridge:
             return {"success": True}
         except Exception as e: return {"success": False, "error": str(e)}
 
-    # REAL DATABASE DELETE CALLED HERE
     def delete_payment(self, pay_id=""):
         try:
             p = next((p for p in db_core.read_table('PaymentMaster') if str(p.get('Payment ID')) == str(pay_id)), None)
