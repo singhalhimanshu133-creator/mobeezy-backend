@@ -149,23 +149,26 @@ class APIBridge:
 
     # --- MASTER CLOUD WRITE HELPER ---
     def _write_to_db(self, table_name, data_list):
-        """Helper to ensure every row has perfectly matching schema keys before writing to DB."""
+        """Helper to ensure every row has perfectly matching schema keys AND STRICT DATA TYPES before writing to DB."""
         if not data_list: return True
         schema = db_core.SCHEMAS.get(table_name, [])
         
+        numeric_cols = {'Debit', 'Credit', 'Balance', 'Profit', 'Amount', 'Rate', 'Total Amount', 'Grand Total', 'Packing Charges', 'Freight Charges', 'Discount', 'Other Charges', 'Cost Price', 'Selling Price', 'Unit Rate', 'Line Amount'}
+        int_cols = {'Ordered Qty', 'Delivered Qty', 'Pending Qty', 'Total Items', 'Total Quantity'}
+
         cleaned_list = []
         for data_dict in data_list:
-            new_dict = dict(data_dict) # Dictionary ki safe copy
+            new_dict = {}
             for col in schema:
-                # Agar koi bhi column payload se miss hua toh use cloud bhejte waqt auto-fill kar do
-                if col not in new_dict:
-                    if col in ['Debit', 'Credit', 'Balance', 'Profit', 'Amount', 'Rate', 'Total Amount', 'Grand Total', 'Packing Charges', 'Freight Charges', 'Discount', 'Other Charges', 'Cost Price', 'Selling Price', 'Unit Rate', 'Line Amount']:
-                        new_dict[col] = 0.0
-                    elif col in ['Ordered Qty', 'Delivered Qty', 'Pending Qty', 'Total Items', 'Total Quantity']:
-                        new_dict[col] = 0
-                    else:
-                        new_dict[col] = ""
+                val = data_dict.get(col)
+                if col in numeric_cols:
+                    new_dict[col] = self._safe_float(val)
+                elif col in int_cols:
+                    new_dict[col] = self._safe_int(val)
+                else:
+                    new_dict[col] = "" if val is None else str(val).strip()
             cleaned_list.append(new_dict)
+            
         return db_core.write_table(table_name, cleaned_list)
 
     # --- AUTH ---
